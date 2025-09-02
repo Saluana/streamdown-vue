@@ -9,8 +9,9 @@ import type { Element, Root, Text } from 'hast';
 import CodeBlock from './components/CodeBlock';
 import MermaidBlock from './components/MermaidBlock';
 import defaultComponents, { ComponentMap } from './components/components';
-import { parseMarkdownIntoBlocks } from './parse-blocks';
-import { parseIncompleteMarkdown } from './parse-incomplete-markdown';
+import { parseBlocks } from '../lib/parse-blocks';
+import { parseIncompleteMarkdown } from '../lib/parse-incomplete-markdown';
+import { fixDollarSignMath, fixMatrix } from '../lib/latex-utils';
 import { hardenHref, hardenSrc, HardenOptions } from './security/harden-vue-markdown';
 import 'katex/dist/katex.min.css';
 
@@ -117,10 +118,15 @@ export const StreamMarkdown = defineComponent({
           .join('');
         if (text.trim()) markdownSrc = text;
       }
+
+      // Pre-process potential LaTeX quirks before further parsing
+      const preprocessed = fixMatrix(fixDollarSignMath(markdownSrc));
+
       const markdown = props.parseIncompleteMarkdown
-        ? parseIncompleteMarkdown(markdownSrc)
-        : markdownSrc;
-      const blocks = parseMarkdownIntoBlocks(markdown).map((b) =>
+        ? parseIncompleteMarkdown(preprocessed)
+        : preprocessed;
+
+      const blocks = parseBlocks(markdown).map((b) =>
         props.parseIncompleteMarkdown ? parseIncompleteMarkdown(b.trim()) : b
       );
       const vnodes = blocks.flatMap((block) => {

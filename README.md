@@ -9,6 +9,7 @@ renders each block incrementally.
 
 - GitHub‑flavored Markdown (tables, task lists, strikethrough)
 - KaTeX math rendering
+- Advanced LaTeX fixes for matrices and dollar-sign math
 - Syntax‑highlighted code blocks with copy button and light/dark themes (Shiki)
 - Mermaid diagrams with loading spinner, error recovery and copy button
 - Auto‑fixes incomplete Markdown tokens while streaming
@@ -18,7 +19,7 @@ renders each block incrementally.
 ## Usage
 
 ```ts
-import { StreamMarkdown } from 'vuedown'
+import { StreamMarkdown, parseBlocks, parseIncompleteMarkdown } from 'vuedown'
 ```
 
 ```vue

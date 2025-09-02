@@ -1,6 +1,8 @@
 import { marked } from 'marked';
 
-export const parseMarkdownIntoBlocks = (markdown: string): string[] => {
+// Exposed utility that splits markdown into logical blocks while
+// keeping streaming math segments together.
+export const parseBlocks = (markdown: string): string[] => {
   const tokens = marked.use({ gfm: true }).lexer(markdown);
   const blocks = tokens.map((token) => token.raw);
   
