@@ -101,6 +101,14 @@ export const StreamMarkdown = defineComponent({
         return h(tag, nodeProps, children);
       }
 
+      if (tag === 'hr') {
+        const classList = new Set<string>((nodeProps.className as string[]) || []);
+        classList.add('my-6 border-border');
+        nodeProps.class = Array.from(classList).join(' ');
+        delete nodeProps.className;
+        return h(tag, nodeProps);
+      }
+
       // tailwind styling
       const classList = new Set<string>((nodeProps.className as string[]) || []);
       const map: Record<string, string> = {
