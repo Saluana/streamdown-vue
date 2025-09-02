@@ -250,9 +250,8 @@ const x: number = 1;
 ```
 ````
 
-````
-
 Override with your custom block:
+
 ```ts
 import { defineComponent, h } from 'vue';
 import { useShikiHighlighter } from 'streamdown-vue';
@@ -267,7 +266,7 @@ const MyCode = defineComponent({
 });
 
 <StreamMarkdown :components="{ codeblock: MyCode }" />
-````
+```
 
 The default copy button uses the Clipboard API and toggles an icon for UX.
 
@@ -283,13 +282,12 @@ graph TD;A-->B;B-->C;
 ```
 ````
 
-````
-
 The `MermaidBlock` component handles:
-- Deduplicated initialization
-- Simple hash based caching
-- Error fallback (last good diagram)
-- Copy diagram source
+
+-   Deduplicated initialization
+-   Simple hash based caching
+-   Error fallback (last good diagram)
+-   Copy diagram source
 
 You can override it via `components` if you need advanced theming.
 
@@ -299,10 +297,10 @@ You can override it via `components` if you need advanced theming.
 
 The pipeline runs `remark-math` / `rehype-katex` for `$$...$$` and inline `$...$` (currency `$` is escaped by `fixDollarSignMath`). Additional helper repairs:
 
-| Helper | Purpose |
-|--------|---------|
+| Helper              | Purpose                                                                 |
+| ------------------- | ----------------------------------------------------------------------- |
 | `fixDollarSignMath` | Escapes stray `$` that look like currency to prevent false math blocks. |
-| `fixMatrix` | Ensures matrix environments have proper row `\\` line breaks. |
+| `fixMatrix`         | Ensures matrix environments have proper row `\\` line breaks.           |
 
 You can pre-process raw content with them if needed.
 
@@ -311,9 +309,11 @@ You can pre-process raw content with them if needed.
 ## 12. Utilities
 
 ### `parseIncompleteMarkdown(text: string)`
+
 Repairs incomplete constructs (unclosed `**`, `_`, `` ` ``, `~~`, `$$` blocks, links/images) so partial buffers still render.
 
 ### `parseBlocks(text: string)`
+
 Tokenizes markdown into stable block strings; combining repaired buffer pieces reduces re‑parsing cost vs re‑feeding the whole document each keystroke.
 
 Usage inside a stream loop (see Tutorial above). Both exported from package root.
@@ -322,11 +322,11 @@ Usage inside a stream loop (see Tutorial above). Both exported from package root
 
 ## 13. Performance Tips
 
-- Debounce UI updates: apply repairs & re-render at ~30–60fps (e.g. `requestAnimationFrame`).
-- Reuse a single `<StreamMarkdown>` instance; change only `content` prop.
-- Avoid running large custom remark/rehype plugins on every partial—they run on full text.
-- If highlighting is heavy for enormous fences, lazy-replace code block component after final chunk.
-- Use server-side rendering for initial payload to reduce Total Blocking Time.
+-   Debounce UI updates: apply repairs & re-render at ~30–60fps (e.g. `requestAnimationFrame`).
+-   Reuse a single `<StreamMarkdown>` instance; change only `content` prop.
+-   Avoid running large custom remark/rehype plugins on every partial—they run on full text.
+-   If highlighting is heavy for enormous fences, lazy-replace code block component after final chunk.
+-   Use server-side rendering for initial payload to reduce Total Blocking Time.
 
 Benchmarks (see `docs/performance.md`) show ~56ms render of the complex fixture under Bun (subject to change).
 
@@ -337,10 +337,11 @@ Benchmarks (see `docs/performance.md`) show ~56ms render of the complex fixture 
 This section shows end‑to‑end integration in a Nuxt 3 project: installation, global registration, a streaming composable, and a server route that emits incremental Markdown.
 
 ### 14.1 Install
+
 ```bash
 npm i streamdown-vue
 # or: bun add streamdown-vue
-````
+```
 
 ### 14.2 Add a Client Plugin (Shiki + KaTeX)
 
@@ -505,7 +506,6 @@ That’s it—Nuxt integration is essentially drop‑in plus an optional streami
 | ------------------------------------- | ----------------------------------------------------------- |
 | AI Chat                               | Combine streaming buffer + `<StreamMarkdown>` (tutorial §4) |
 | Restrict to CDN images                | Set `:allowed-image-prefixes`                               |
-| Override `<table>` style              | `components={{ table: MyTable }}`                           |
 | Override `<table>` style              | `:components="{ table: MyTable }"`                          |
 | Add custom remark plugin              | `:remark-plugins="[myRemark]"`                              |
 | Append footer paragraph automatically | remark plugin injecting node                                |
