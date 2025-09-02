@@ -27,6 +27,30 @@ import { StreamMarkdown } from 'vuedown'
 </template>
 ```
 
+### Styling
+
+Vuedown uses Tailwind utility classes. If your project already has Tailwind
+configured (Nuxt or Vite), no additional configuration is required. Make sure to
+import the KaTeX CSS once:
+
+```ts
+import 'katex/dist/katex.min.css';
+```
+
+Example Nuxt/Vite component:
+
+```vue
+<template>
+  <StreamMarkdown class="prose" :content="markdown" />
+</template>
+
+<script setup lang="ts">
+import { StreamMarkdown } from 'vuedown'
+import 'katex/dist/katex.min.css'
+const markdown = '# Hello\n\nSome *MD*';
+</script>
+```
+
 ## Development
 
 - `bun build` – build the package into `dist`

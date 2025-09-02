@@ -8,27 +8,48 @@ import rehypeKatex from 'rehype-katex';
 import type { Element, Root, Text } from 'hast';
 import CodeBlock from './components/CodeBlock';
 import MermaidBlock from './components/MermaidBlock';
+import defaultComponents, { ComponentMap } from './components/components';
 import { parseMarkdownIntoBlocks } from './parse-blocks';
-import { fixIncompleteMarkdown as fixMarkdown } from './fix-incomplete-markdown';
+import { parseIncompleteMarkdown } from './parse-incomplete-markdown';
+import { hardenHref, hardenSrc, HardenOptions } from './security/harden-vue-markdown';
 import 'katex/dist/katex.min.css';
 
 export const StreamMarkdown = defineComponent({
   name: 'StreamMarkdown',
   props: {
     content: { type: String, default: '' },
+    'class': { type: String, default: '' },
+    className: { type: String, default: '' },
+    components: { type: Object as () => ComponentMap, default: () => ({}) },
+    remarkPlugins: { type: Array as () => any[], default: () => [] },
+    rehypePlugins: { type: Array as () => any[], default: () => [] },
+    defaultOrigin: { type: String, default: undefined },
     allowedImagePrefixes: { type: Array as () => string[], default: () => ['https://', 'http://'] },
     allowedLinkPrefixes: { type: Array as () => string[], default: () => ['https://', 'http://'] },
-    parseIncomplete: { type: Boolean, default: true },
+    parseIncompleteMarkdown: { type: Boolean, default: true },
   },
-  setup(props) {
+  setup(props, { slots }) {
     const processor = unified()
       .use(remarkParse)
       .use(remarkGfm)
-      .use(remarkMath)
-      .use(remarkRehype, { allowDangerousHtml: false })
-      .use(rehypeKatex);
+      .use(remarkMath);
 
-    const isAllowed = (url: string, prefixes: string[]) => prefixes.some((p) => url.startsWith(p));
+    props.remarkPlugins.forEach((p) => processor.use(p as any));
+
+    processor.use(remarkRehype, { allowDangerousHtml: false }).use(rehypeKatex);
+
+    props.rehypePlugins.forEach((p) => processor.use(p as any));
+
+    const hardenOptions: HardenOptions = {
+      allowedImagePrefixes: props.allowedImagePrefixes,
+      allowedLinkPrefixes: props.allowedLinkPrefixes,
+      defaultOrigin: props.defaultOrigin,
+    };
+
+    const componentsMap: ComponentMap = {
+      ...defaultComponents,
+      ...(props.components || {}),
+    };
 
     const renderChildren = (nodes: any[], parent?: string): any[] =>
       nodes.map((n) => renderNode(n, parent)).filter(Boolean);
@@ -50,20 +71,25 @@ export const StreamMarkdown = defineComponent({
 
       // security filters
       if (tag === 'a') {
-        const href = String(nodeProps.href || '');
-        if (!isAllowed(href, props.allowedLinkPrefixes)) {
-          return children;
-        }
+        const href = hardenHref(String(nodeProps.href || ''), hardenOptions);
+        if (!href) return children;
+        nodeProps.href = href;
         nodeProps.target = '_blank';
         nodeProps.rel = 'noreferrer';
       }
       if (tag === 'img') {
-        const src = String(nodeProps.src || '');
-        if (!isAllowed(src, props.allowedImagePrefixes)) return null;
+        const src = hardenSrc(String(nodeProps.src || ''), hardenOptions);
+        if (!src) return null;
+        nodeProps.src = src;
       }
 
       // code or mermaid blocks
-      if (tag === 'pre' && el.children && el.children[0] && el.children[0].tagName === 'code') {
+      if (
+        tag === 'pre' &&
+        el.children &&
+        el.children[0] &&
+        (el.children[0] as Element).tagName === 'code'
+      ) {
         const codeEl = el.children[0] as Element;
         const code = extractText(codeEl);
         const className = (codeEl.properties?.className || []) as string[];
@@ -75,65 +101,36 @@ export const StreamMarkdown = defineComponent({
         return h(CodeBlock, { code, language: lang });
       }
 
-      // inline code styling
-      if (tag === 'code' && parentTag !== 'pre') {
-        const classList = new Set<string>((nodeProps.className as string[]) || []);
-        classList.add('bg-muted px-1.5 py-0.5 font-mono text-sm');
-        nodeProps.class = Array.from(classList).join(' ');
-        delete nodeProps.className;
-        return h(tag, nodeProps, children);
+      const comp = componentsMap[tag];
+      if (comp) {
+        return h(comp, nodeProps, children);
       }
-
-      // table wrapper and cell styles
-      if (tag === 'table') {
-        const classList = new Set<string>((nodeProps.className as string[]) || []);
-        classList.add('w-full text-sm');
-        nodeProps.class = Array.from(classList).join(' ');
-        delete nodeProps.className;
-        const table = h('table', nodeProps, children);
-        return h('div', { class: 'overflow-x-auto' }, [table]);
-      }
-      if (tag === 'th' || tag === 'td') {
-        const classList = new Set<string>((nodeProps.className as string[]) || []);
-        classList.add('border px-2 py-1');
-        nodeProps.class = Array.from(classList).join(' ');
-        delete nodeProps.className;
-        return h(tag, nodeProps, children);
-      }
-
-      if (tag === 'hr') {
-        const classList = new Set<string>((nodeProps.className as string[]) || []);
-        classList.add('my-6 border-border');
-        nodeProps.class = Array.from(classList).join(' ');
-        delete nodeProps.className;
-        return h(tag, nodeProps);
-      }
-
-      // tailwind styling
-      const classList = new Set<string>((nodeProps.className as string[]) || []);
-      const map: Record<string, string> = {
-        h1: 'text-3xl font-bold',
-        h2: 'text-2xl font-bold',
-        h3: 'text-xl font-semibold',
-        ul: 'list-disc pl-6',
-        ol: 'list-decimal pl-6',
-        blockquote: 'border-l-4 pl-4 italic',
-      };
-      if (map[tag]) classList.add(map[tag]);
-      if (classList.size) nodeProps.class = Array.from(classList).join(' ');
-      delete nodeProps.className;
-
       return h(tag, nodeProps, children);
     };
 
     return () => {
-      const markdown = props.parseIncomplete ? fixMarkdown(props.content) : props.content;
-      const blocks = parseMarkdownIntoBlocks(markdown).map((b) => (props.parseIncomplete ? fixMarkdown(b.trim()) : b));
+      let markdownSrc = props.content;
+      const slotNodes = slots.default ? slots.default() : [];
+      if (slotNodes && slotNodes.length > 0) {
+        const text = slotNodes
+          .map((n: any) => (typeof n.children === 'string' ? n.children : ''))
+          .join('');
+        if (text.trim()) markdownSrc = text;
+      }
+      const markdown = props.parseIncompleteMarkdown
+        ? parseIncompleteMarkdown(markdownSrc)
+        : markdownSrc;
+      const blocks = parseMarkdownIntoBlocks(markdown).map((b) =>
+        props.parseIncompleteMarkdown ? parseIncompleteMarkdown(b.trim()) : b
+      );
       const vnodes = blocks.flatMap((block) => {
         const tree = processor.runSync(processor.parse(block)) as Root;
         return renderChildren(tree.children as any[]);
       });
-      return h('div', { class: 'vuedown space-y-4' }, vnodes);
+      const rootClass = ['vuedown space-y-4', props.class, props.className]
+        .filter(Boolean)
+        .join(' ');
+      return h('div', { class: rootClass || undefined }, vnodes);
     };
   },
 });
