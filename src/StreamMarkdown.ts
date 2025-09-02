@@ -40,18 +40,28 @@ export const StreamMarkdown = defineComponent({
         parseIncompleteMarkdown: { type: Boolean, default: true },
     },
     setup(props, { slots }) {
-        const processor = unified()
-            .use(remarkParse)
-            .use(remarkGfm)
-            .use(remarkMath);
+        // Some bundlers (CJS builds) may wrap ESM-only remark/rehype plugins
+        // so that the actual plugin function is under .default. If we pass the
+        // namespace object to `unified().use()` it is treated as a (empty) preset
+        // and unified throws "Expected usable value but received an empty preset".
+        // This helper extracts the real function when necessary.
+        const ensurePlugin = (p: any) =>
+            p && typeof p === 'object' && 'default' in p
+                ? (p as any).default
+                : p;
 
-        props.remarkPlugins.forEach((p) => processor.use(p as any));
+        const processor = unified()
+            .use(ensurePlugin(remarkParse))
+            .use(ensurePlugin(remarkGfm))
+            .use(ensurePlugin(remarkMath));
+
+        props.remarkPlugins.forEach((p) => processor.use(ensurePlugin(p)));
 
         processor
-            .use(remarkRehype, { allowDangerousHtml: false })
-            .use(rehypeKatex);
+            .use(ensurePlugin(remarkRehype), { allowDangerousHtml: false })
+            .use(ensurePlugin(rehypeKatex));
 
-        props.rehypePlugins.forEach((p) => processor.use(p as any));
+        props.rehypePlugins.forEach((p) => processor.use(ensurePlugin(p)));
 
         const hardenOptions: HardenOptions = {
             allowedImagePrefixes: props.allowedImagePrefixes,

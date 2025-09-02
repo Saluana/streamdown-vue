@@ -19,7 +19,8 @@
         "build:types": "tsc -p tsconfig.build.json",
         "clean": "rm -rf dist",
         "prepublishOnly": "bun run build && bun run test",
-        "test": "bun test"
+        "test:run": "bun test",
+        "test": "bun run build && bun run test:run"
     },
     "files": [
         "dist",
