@@ -361,7 +361,7 @@ const handleIncompleteBoldItalic = (text: string): string => {
 };
 
 // Auto-closes unbalanced markdown tokens so streaming content always renders
-export const fixIncompleteMarkdown = (text: string): string => {
+export const parseIncompleteMarkdown = (text: string): string => {
   if (!text || typeof text !== 'string') {
     return text;
   }
