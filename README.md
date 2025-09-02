@@ -279,7 +279,7 @@ Fenced block:
 
 ````md
 ```mermaid
-
+graph TD;A-->B;B-->C;
 ```
 ````
 
@@ -340,10 +340,12 @@ This section shows end‑to‑end integration in a Nuxt 3 project: installation,
 ```bash
 npm i streamdown-vue
 # or: bun add streamdown-vue
-```
+````
 
 ### 14.2 Add a Client Plugin (Shiki + KaTeX)
+
 Create `plugins/streamdown.client.ts` (client only so Shiki & Mermaid load in browser):
+
 ```ts
 // plugins/streamdown.client.ts
 import 'katex/dist/katex.min.css'; // once globally
@@ -351,50 +353,69 @@ import 'katex/dist/katex.min.css'; // once globally
 import { useShikiHighlighter } from 'streamdown-vue';
 useShikiHighlighter();
 ```
+
 Nuxt auto‑registers anything in `plugins/`. No manual config required unless you disabled auto import.
 
 ### 14.3 Basic Page Usage
+
 ```vue
 <!-- pages/index.vue -->
 <template>
     <div class="prose mx-auto p-6">
         <StreamMarkdown :content="md" />
     </div>
-    <footer class="text-xs opacity-60 mt-8">Rendered with streamdown-vue</footer>
-    </template>
+    <footer class="text-xs opacity-60 mt-8">
+        Rendered with streamdown-vue
+    </footer>
+</template>
 <script setup lang="ts">
 import { StreamMarkdown } from 'streamdown-vue';
-const md = '# Welcome to Nuxt\\n\\nThis **Markdown** is rendered *streamdown style*.';
+const md =
+    '# Welcome to Nuxt\\n\\nThis **Markdown** is rendered *streamdown style*.';
 </script>
 ```
 
 ### 14.4 Global Component (Optional)
+
 If you prefer auto‑import without explicit import each time, add an alias export file:
+
 ```ts
 // components/StreamMarkdown.client.ts
 export { StreamMarkdown as default } from 'streamdown-vue';
 ```
+
 Now `<StreamMarkdown />` is available automatically (Nuxt scans `components/`).
 
 ### 14.5 Secure Link / Image Allow‑Lists
+
 In any page/component:
+
 ```vue
 <StreamMarkdown
     :content="md"
-    :allowed-link-prefixes="['https://','/']"
+    :allowed-link-prefixes="['https://', '/']"
     :allowed-image-prefixes="['https://cdn.myapp.com/']"
     default-origin="https://myapp.com"
 />
 ```
+
 Relative links (e.g. `/about`) will resolve against `defaultOrigin` then be validated.
 
 ### 14.6 Streaming From a Server Route (SSE Style)
+
 Create a route that emits partial Markdown pieces:
+
 ```ts
 // server/api/chat.get.ts
 export default defineEventHandler(async (event) => {
     const encoder = new TextEncoder();
-    const parts = ['# Chat Log\n', '\nHello **world', '** from', ' streamed', ' markdown.'];
+    const parts = [
+        '# Chat Log\n',
+        '\nHello **world',
+        '** from',
+        ' streamed',
+        ' markdown.',
+    ];
     const stream = new ReadableStream({
         start(controller) {
             let i = 0;
@@ -405,7 +426,7 @@ export default defineEventHandler(async (event) => {
                 } else controller.close();
             };
             tick();
-        }
+        },
     });
     setHeader(event, 'Content-Type', 'text/plain; charset=utf-8');
     return stream; // Nuxt will send as a stream
@@ -413,6 +434,7 @@ export default defineEventHandler(async (event) => {
 ```
 
 ### 14.7 Client Composable to Consume Streaming Markdown
+
 ```ts
 // composables/useStreamedMarkdown.ts
 import { ref } from 'vue';
@@ -443,6 +465,7 @@ export function useStreamedMarkdown(url: string) {
 ```
 
 ### 14.8 Streaming Page Example
+
 ```vue
 <!-- pages/stream.vue -->
 <template>
@@ -457,17 +480,19 @@ const { rendered, start } = useStreamedMarkdown('/api/chat');
 ```
 
 ### 14.9 SSR Caveats
-- The stream loop runs only client-side; on first SSR render you may want a placeholder skeleton.
-- Shiki highlighting of large code blocks happens client-side; if you need critical highlighted code for SEO, pre-process the markdown on the server and send the HTML (future enhancement: server highlight hook).
-- Ensure Mermaid is only executed client-side (the provided plugin pattern handles this since the component executes render logic on mount).
+
+-   The stream loop runs only client-side; on first SSR render you may want a placeholder skeleton.
+-   Shiki highlighting of large code blocks happens client-side; if you need critical highlighted code for SEO, pre-process the markdown on the server and send the HTML (future enhancement: server highlight hook).
+-   Ensure Mermaid is only executed client-side (the provided plugin pattern handles this since the component executes render logic on mount).
 
 ### 14.10 Troubleshooting
-| Symptom | Fix |
-|--------|-----|
-| Copy button not showing | Ensure default `CodeBlock` not overridden or your custom block renders the button. |
-| Links stripped | Adjust `allowed-link-prefixes` / set `default-origin` to resolve relative paths first. |
-| Images missing | Add CDN prefix to `allowed-image-prefixes`. |
-| Flash of unstyled math | Confirm KaTeX CSS loaded in client plugin before first render. |
+
+| Symptom                  | Fix                                                                                      |
+| ------------------------ | ---------------------------------------------------------------------------------------- |
+| Copy button not showing  | Ensure default `CodeBlock` not overridden or your custom block renders the button.       |
+| Links stripped           | Adjust `allowed-link-prefixes` / set `default-origin` to resolve relative paths first.   |
+| Images missing           | Add CDN prefix to `allowed-image-prefixes`.                                              |
+| Flash of unstyled math   | Confirm KaTeX CSS loaded in client plugin before first render.                           |
 | High CPU on huge streams | Throttle updates (wrap repair/render in `requestAnimationFrame` or batch by char count). |
 
 That’s it—Nuxt integration is essentially drop‑in plus an optional streaming composable.
@@ -476,21 +501,23 @@ That’s it—Nuxt integration is essentially drop‑in plus an optional streami
 
 ## 15. Recipe Gallery
 
-| Goal | Snippet |
-|------|---------|
-| AI Chat | Combine streaming buffer + `<StreamMarkdown>` (tutorial §4) |
-| Restrict to CDN images | Set `:allowed-image-prefixes` |
-| Override `<table>` style | `components={{ table: MyTable }}` |
-| Add custom remark plugin | `:remark-plugins="[myRemark]"` |
-| Append footer paragraph automatically | remark plugin injecting node |
+| Goal                                  | Snippet                                                     |
+| ------------------------------------- | ----------------------------------------------------------- |
+| AI Chat                               | Combine streaming buffer + `<StreamMarkdown>` (tutorial §4) |
+| Restrict to CDN images                | Set `:allowed-image-prefixes`                               |
+| Override `<table>` style              | `components={{ table: MyTable }}`                           |
+| Override `<table>` style              | `:components="{ table: MyTable }"`                          |
+| Add custom remark plugin              | `:remark-plugins="[myRemark]"`                              |
+| Append footer paragraph automatically | remark plugin injecting node                                |
 
 Custom remark plugin skeleton:
+
 ```ts
 const remarkAppend = () => (tree: any) => {
     tree.children.push({ type: 'paragraph', children: [{ type: 'text', value: 'Tail note.' }] });
 };
 <StreamMarkdown :remark-plugins="[remarkAppend]" />
-````
+```
 
 ---
 
