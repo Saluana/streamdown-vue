@@ -1,10 +1,10 @@
 import { expect, test } from 'bun:test';
-import { parseMarkdownIntoBlocks } from '../src/parse-blocks';
-import { parseIncompleteMarkdown } from '../src/parse-incomplete-markdown';
+import { parseBlocks } from '../lib/parse-blocks';
+import { parseIncompleteMarkdown } from '../lib/parse-incomplete-markdown';
 
-test('parseMarkdownIntoBlocks splits markdown into blocks', () => {
+test('parseBlocks splits markdown into blocks', () => {
   const md = '# Title\n\nParagraph one.\n\n- item1\n- item2';
-  const blocks = parseMarkdownIntoBlocks(md);
+  const blocks = parseBlocks(md);
   expect(blocks.length).toBeGreaterThan(1);
 });
 
