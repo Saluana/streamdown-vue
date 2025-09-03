@@ -558,7 +558,7 @@ PRs for: improved matrix handling, plugin toggles, directive support, performanc
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-Licensed under the Apache License, Version 2.0. You may not use this project except in compliance with the License. See the `LICENSE` file for the full text.
+Licensed under the Apache License, Version 2.0.
 
 ---
 
