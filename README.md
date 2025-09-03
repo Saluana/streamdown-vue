@@ -509,6 +509,7 @@ That’s it—Nuxt integration is essentially drop‑in plus an optional streami
 | Override `<table>` style              | `:components="{ table: MyTable }"`                          |
 | Add custom remark plugin              | `:remark-plugins="[myRemark]"`                              |
 | Append footer paragraph automatically | remark plugin injecting node                                |
+| Basic local Vue example               | See `examples/basic` in repo                                |
 
 Custom remark plugin skeleton:
 

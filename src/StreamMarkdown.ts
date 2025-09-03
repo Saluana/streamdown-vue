@@ -83,6 +83,26 @@ export const StreamMarkdown = defineComponent({
             return '';
         }
 
+        // Helper to create a VNode with proper slot wrapping for component children
+        const createVNode = (comp: any, props: any, children: any) => {
+            const isHtml = typeof comp === 'string';
+            if (isHtml) {
+                return children && children.length
+                    ? h(comp, props, children)
+                    : h(comp, props);
+            }
+            if (
+                !children ||
+                (Array.isArray(children) && children.length === 0)
+            ) {
+                return h(comp, props);
+            }
+            const slotFn = Array.isArray(children)
+                ? () => children
+                : () => [children];
+            return h(comp, props, { default: slotFn });
+        };
+
         const renderNode = (node: any, parentTag?: string): any => {
             if (!node) return null;
             if (node.type === 'text') return (node as Text).value;
@@ -137,9 +157,9 @@ export const StreamMarkdown = defineComponent({
 
             const comp = componentsMap[tag];
             if (comp) {
-                return h(comp, nodeProps, children);
+                return createVNode(comp, nodeProps, children);
             }
-            return h(tag, nodeProps, children);
+            return createVNode(tag, nodeProps, children);
         };
 
         return () => {
