@@ -9,8 +9,13 @@ export default defineConfig({
             include: ['index.ts', 'src', 'lib'],
             outDir: 'dist',
             insertTypesEntry: true,
+            // Roll up all d.ts into a single entry (reduces published size)
+            rollupTypes: true,
         }),
     ],
+    define: {
+        'process.env.NODE_ENV': '"production"',
+    },
     build: {
         lib: {
             entry: 'index.ts',
@@ -35,10 +40,14 @@ export default defineConfig({
             ],
             output: {
                 globals: { vue: 'Vue' },
+                // Keep only license comments we must retain (lucide, etc.)
+                banner: '/**\n * streamdown-vue (c) 2025 @Saluana\n * MIT Licensed. Contains portions with their own licenses (see LICENSE).\n */',
             },
         },
-        sourcemap: true,
+        // Disable source maps for published build to reduce package size.
+        sourcemap: false,
+        // Use esbuild minification (fast) with higher target for smaller output
         minify: 'esbuild',
-        target: 'es2019',
+        target: 'es2022',
     },
 });
