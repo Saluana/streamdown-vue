@@ -11,7 +11,7 @@ import MermaidBlock from './components/MermaidBlock';
 import defaultComponents, { type ComponentMap } from './components/components';
 import { parseBlocks } from '../lib/parse-blocks';
 import { parseIncompleteMarkdown } from '../lib/parse-incomplete-markdown';
-import { fixDollarSignMath, fixMatrix } from '../lib/latex-utils';
+import { fixMatrix, normalizeDisplayMath } from '../lib/latex-utils';
 import {
     hardenHref,
     hardenSrc,
@@ -174,20 +174,125 @@ export const StreamMarkdown = defineComponent({
                 if (text.trim()) markdownSrc = text;
             }
 
-            // Pre-process potential LaTeX quirks before further parsing
-            const preprocessed = fixMatrix(fixDollarSignMath(markdownSrc));
+            // Light LaTeX preprocessing: only fix matrix row breaks.
+            // We intentionally do NOT auto-escape stray $ anymore to avoid
+            // breaking streaming scenarios where the closing delimiter arrives later.
+            if (
+                /\\begin\{.*matrix\}/.test(markdownSrc) ||
+                /\$\$/.test(markdownSrc)
+            ) {
+                console.log(
+                    '[StreamMarkdown] incoming content len=',
+                    markdownSrc.length
+                );
+            }
+            let preprocessed = fixMatrix(markdownSrc);
+            const afterFix = preprocessed;
+            preprocessed = normalizeDisplayMath(preprocessed);
+            if (afterFix !== preprocessed) {
+                console.log(
+                    '[StreamMarkdown] after normalizeDisplayMath diffLen=',
+                    preprocessed.length - afterFix.length
+                );
+            }
+            if (preprocessed !== markdownSrc) {
+                console.log(
+                    '[StreamMarkdown] after fixMatrix diffLen=',
+                    preprocessed.length - markdownSrc.length
+                );
+            }
 
             const markdown = props.parseIncompleteMarkdown
                 ? parseIncompleteMarkdown(preprocessed)
                 : preprocessed;
 
-            const blocks = parseBlocks(markdown).map((b) =>
-                props.parseIncompleteMarkdown
-                    ? parseIncompleteMarkdown(b.trim())
-                    : b
-            );
-            const vnodes = blocks.flatMap((block) => {
+            // First split into coarse blocks.
+            let rawBlocks = parseBlocks(markdown);
+
+            // Merge consecutive blocks if, when concatenated, they resolve an odd $$ count
+            // (i.e. an opening display math without its closing yet). This prevents splitting
+            // a multi-line matrix display between separate unified parses which causes KaTeX
+            // to treat the opening as plain text.
+            const merged: string[] = [];
+            let buffer: string[] = [];
+            let bufferDollarCount = 0;
+            const flush = () => {
+                if (buffer.length) {
+                    merged.push(buffer.join('\n\n'));
+                    buffer = [];
+                    bufferDollarCount = 0;
+                }
+            };
+            for (const blk of rawBlocks) {
+                const count = (blk.match(/\$\$/g) || []).length;
+                if (buffer.length === 0) {
+                    if (count % 2 === 1) {
+                        // start unbalanced sequence
+                        buffer.push(blk);
+                        bufferDollarCount += count;
+                        continue;
+                    } else {
+                        merged.push(blk);
+                        continue;
+                    }
+                } else {
+                    buffer.push(blk);
+                    bufferDollarCount += count;
+                    if (bufferDollarCount % 2 === 0) {
+                        flush();
+                    }
+                }
+            }
+            flush();
+
+            const blocks = merged
+                .map((b, idx) => {
+                    if (/\\begin\{.*matrix\}/.test(b) || /\$\$/.test(b)) {
+                        console.log(
+                            '[StreamMarkdown] block',
+                            idx,
+                            'len=',
+                            b.length,
+                            'dollarPairs=',
+                            (b.match(/\$\$/g) || []).length
+                        );
+                    }
+                    return b;
+                })
+                .map((b) =>
+                    props.parseIncompleteMarkdown
+                        ? parseIncompleteMarkdown(b.trim())
+                        : b
+                );
+            blocks.forEach((b, idx) => {
+                if (/\\begin\{.*matrix\}/.test(b) || /\$\$/.test(b)) {
+                    console.log(
+                        '[StreamMarkdown] repaired block',
+                        idx,
+                        'len=',
+                        b.length,
+                        'pairs=',
+                        (b.match(/\$\$/g) || []).length
+                    );
+                }
+            });
+            const vnodes = blocks.flatMap((block, bi) => {
+                if (/\\begin\{.*matrix\}/.test(block)) {
+                    console.log(
+                        '[StreamMarkdown] BEFORE PARSE matrix block index',
+                        bi,
+                        '\n' + block
+                    );
+                }
                 const tree = processor.runSync(processor.parse(block)) as Root;
+                if (/\\begin\{.*matrix\}/.test(block)) {
+                    console.log(
+                        '[StreamMarkdown] AFTER PARSE matrix block index',
+                        bi,
+                        'children=',
+                        tree.children.length
+                    );
+                }
                 return renderChildren(tree.children as any[]);
             });
             const rootClass = [

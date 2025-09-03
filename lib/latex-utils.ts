@@ -1,4 +1,8 @@
 export function fixDollarSignMath(content: string): string {
+    console.log(
+        '[latex-utils] fixDollarSignMath: input length',
+        content.length
+    );
     let result = '';
     let i = 0;
     while (i < content.length) {
@@ -8,11 +12,17 @@ export function fixDollarSignMath(content: string): string {
             if (content[i + 1] === '$') {
                 const closing = content.indexOf('$$', i + 2);
                 if (closing !== -1) {
+                    console.log(
+                        '[latex-utils] found block $$ .. $$ segment',
+                        i,
+                        closing
+                    );
                     result += content.slice(i, closing + 2);
                     i = closing + 2;
                     continue;
                 }
                 // unmatched $$, escape both
+                console.log('[latex-utils] unmatched $$ at', i, 'escaping');
                 result += '\\$\\$';
                 i += 2;
                 continue;
@@ -26,6 +36,7 @@ export function fixDollarSignMath(content: string): string {
                     continue;
                 }
                 if (content[j] === '$') {
+                    console.log('[latex-utils] inline $..$ segment', i, j);
                     found = j;
                     break;
                 }
@@ -38,6 +49,7 @@ export function fixDollarSignMath(content: string): string {
                 continue;
             }
             // unmatched single $
+            console.log('[latex-utils] unmatched single $ at', i, 'escaping');
             result += '\\$';
             i++;
             continue;
@@ -45,6 +57,10 @@ export function fixDollarSignMath(content: string): string {
         result += char;
         i++;
     }
+    console.log(
+        '[latex-utils] fixDollarSignMath: output length',
+        result.length
+    );
     return result;
 }
 
@@ -54,23 +70,90 @@ const matrixEnv =
 export function fixMatrix(content: string): string {
     return content.replace(
         matrixEnv,
-        (_, begin: string, body: string, end: string) => {
-            const rawRows = body
+        (
+            match: string,
+            begin: string,
+            body: string,
+            end: string,
+            offset: number
+        ) => {
+            console.log(
+                '[latex-utils] fixMatrix: match at',
+                offset,
+                'length',
+                match.length
+            );
+            console.log('[latex-utils]   begin token:', begin);
+            console.log('[latex-utils]   raw body:\n' + body);
+            // Split on raw newlines; ignore purely empty lines.
+            let rawRows = body
                 .split(/\n+/g)
                 .map((r) => r.trim())
-                .filter(Boolean);
+                .filter((r) => r.length > 0 && r !== '\\');
+            console.log('[latex-utils]   initial rows', rawRows);
+            // If a row contains internal \\ delimiters on the same physical line, expand them.
+            if (rawRows.some((r) => /\\\\/.test(r))) {
+                const expanded: string[] = [];
+                for (const r of rawRows) {
+                    if (/\\\\/.test(r)) {
+                        // Split on explicit row breaks, drop empty trailing segments
+                        const segs = r
+                            .split(/\\\\\s*/)
+                            .map((s) => s.trim())
+                            .filter((s) => s.length > 0 && s !== '\\');
+                        for (const seg of segs) {
+                            expanded.push(seg);
+                        }
+                    } else {
+                        expanded.push(r);
+                    }
+                }
+                rawRows = expanded;
+                console.log('[latex-utils]   expanded rows', rawRows);
+            }
             if (rawRows.length === 0) return `${begin}\n${end}`;
             const fixed = rawRows
-                .map((r, i) => {
-                    // Remove any trailing single backslash
-                    r = r.replace(/\\$/, '');
-                    // If row already ends with \\ leave it, else add for all but last
-                    if (i < rawRows.length - 1)
-                        return /\\\\\s*$/.test(r) ? r : `${r} \\`;
-                    return r;
+                .map((row, i) => {
+                    const original = row;
+                    // If already has a proper \\ (two backslashes) at end, keep it.
+                    if (i < rawRows.length - 1) {
+                        if (/\\\\\s*$/.test(row)) return row; // already ends with \\
+                        // If it ends with a single backslash (likely truncated), normalize to two.
+                        if (/\\\s*$/.test(row))
+                            return row.replace(/\\\s*$/, ' \\\\');
+                        return row + ' \\\\';
+                    }
+                    // Last row: remove accidental trailing single backslash
+                    return row.replace(/\\\s*$/, '');
                 })
                 .join('\n');
+            console.log('[latex-utils]   fixed matrix body:\n' + fixed);
             return `${begin}\n${fixed}\n${end}`;
         }
     );
+}
+
+// Ensure display math blocks containing matrix environments are on their own lines:
+// $$ <one line matrix> $$  =>  $$\n<multiline body>\n$$
+// This helps remark-math + KaTeX treat them consistently as block math.
+export function normalizeDisplayMath(content: string): string {
+    return content.replace(/\$\$([\s\S]*?)\$\$/g, (full, inner, offset) => {
+        if (!/\\begin\{(?:b|p|B|v|V)?matrix\}/.test(inner)) return full; // only touch matrix blocks
+        // If already starts/ends with newlines (block style) keep as-is.
+        const startsNl = /^\s*\n/.test(inner);
+        const endsNl = /\n\s*$/.test(inner);
+        if (startsNl && endsNl) return full; // already normalized
+        const trimmed = inner.trim();
+        // If it is a single line, try to pretty format rows (they may already be handled by fixMatrix)
+        const pretty = trimmed
+            .replace(/(\\begin\{[^}]+\})/, '$1\n')
+            .replace(/(\\\\)\s*(?=\S)/g, '$1\n') // each \\ followed by non-space becomes row break
+            .replace(/(\\end\{[^}]+\})/, '\n$1');
+        console.log(
+            '[latex-utils] normalizeDisplayMath at',
+            offset,
+            '-> adding block newlines'
+        );
+        return '$$\n' + pretty.trim() + '\n$$';
+    });
 }

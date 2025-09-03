@@ -293,16 +293,24 @@ You can override it via `components` if you need advanced theming.
 
 ---
 
-## 11. Math & LaTeX Fixes
+## 11. Math & LaTeX Helpers
 
-The pipeline runs `remark-math` / `rehype-katex` for `$$...$$` and inline `$...$` (currency `$` is escaped by `fixDollarSignMath`). Additional helper repairs:
+By default the pipeline runs `remark-math` / `rehype-katex` for `$$...$$` and inline `$...$` with **no pre‑munging of dollar signs** (to keep streaming safe when a closing `$` may arrive later). Optional helpers you can call yourself before rendering:
 
-| Helper              | Purpose                                                                 |
-| ------------------- | ----------------------------------------------------------------------- |
-| `fixDollarSignMath` | Escapes stray `$` that look like currency to prevent false math blocks. |
-| `fixMatrix`         | Ensures matrix environments have proper row `\\` line breaks.           |
+| Helper              | Purpose (opt‑in)                                                       |
+| ------------------- | ---------------------------------------------------------------------- |
+| `fixDollarSignMath` | (Optional) Escape truly stray `$` you decide are currency, if desired. |
+| `fixMatrix`         | Ensure matrix environments have proper row `\\` line breaks.           |
 
-You can pre-process raw content with them if needed.
+Example (opt‑in):
+
+```ts
+import { fixMatrix, fixDollarSignMath } from 'streamdown-vue';
+
+const safe = fixMatrix(fixDollarSignMath(markdown));
+```
+
+In streaming scenarios prefer leaving `$` untouched until you know a delimiter is unmatched at the final flush.
 
 ---
 

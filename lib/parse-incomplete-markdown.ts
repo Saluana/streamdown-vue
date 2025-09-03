@@ -301,12 +301,36 @@ const countSingleDollarSigns = (text: string): number => {
 
 // Completes incomplete block KaTeX formatting ($$)
 const handleIncompleteBlockKatex = (text: string): string => {
+    const original = text;
     // Count all $$ pairs in the text
     const dollarPairs = (text.match(/\$\$/g) || []).length;
+    if (dollarPairs % 2 === 1) {
+        console.log(
+            '[parseIncompleteMarkdown] odd $$ count=',
+            dollarPairs,
+            'len=',
+            text.length
+        );
+    }
 
     // If we have an even number of $$, the block is complete
     if (dollarPairs % 2 === 0) {
         return text;
+    }
+
+    // If there is an unmatched \begin{...} environment (e.g. matrix, pmatrix, align)
+    // we defer auto-closing the math block so the environment can finish in later chunks.
+    // Otherwise we'd split the environment across two display math blocks and break KaTeX.
+    const beginCount = (text.match(/\\begin\{[^}]+\}/g) || []).length;
+    const endCount = (text.match(/\\end\{[^}]+\}/g) || []).length;
+    if (beginCount > endCount) {
+        console.log(
+            '[parseIncompleteMarkdown] defer closing $$ due to unmatched \\begin, begins=',
+            beginCount,
+            'ends=',
+            endCount
+        );
+        return text; // leave it open for next chunk
     }
 
     // If we have an odd number, add closing $$
@@ -317,10 +341,12 @@ const handleIncompleteBlockKatex = (text: string): string => {
 
     // For multi-line blocks, add newline before closing $$ if not present
     if (hasNewlineAfterStart && !text.endsWith('\n')) {
+        console.log('[parseIncompleteMarkdown] appending newline+closing $$');
         return `${text}\n$$`;
     }
 
     // For inline blocks or when already ending with newline, just add $$
+    console.log('[parseIncompleteMarkdown] appending inline closing $$');
     return `${text}$$`;
 };
 
@@ -382,6 +408,17 @@ export const parseIncompleteMarkdown = (text: string): string => {
     }
 
     let result = text;
+    const startLen = result.length;
+    const startDollarPairs = (result.match(/\$\$/g) || []).length;
+    // Only log if math related content present
+    if (/\$/.test(result) || /\\begin\{.*matrix\}/.test(result)) {
+        console.log(
+            '[parseIncompleteMarkdown] start len=',
+            startLen,
+            'pairs=',
+            startDollarPairs
+        );
+    }
 
     // Handle incomplete links and images first (removes content)
     result = handleIncompleteLinksAndImages(result);
@@ -400,5 +437,14 @@ export const parseIncompleteMarkdown = (text: string): string => {
     result = handleIncompleteBlockKatex(result);
     // Note: We don't handle inline KaTeX with single $ as they're likely currency symbols
 
+    if (result !== text) {
+        const endDollarPairs = (result.match(/\$\$/g) || []).length;
+        console.log(
+            '[parseIncompleteMarkdown] modified: new len=',
+            result.length,
+            'pairs=',
+            endDollarPairs
+        );
+    }
     return result;
 };
