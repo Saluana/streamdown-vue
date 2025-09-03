@@ -17,7 +17,8 @@ import {
     hardenSrc,
     type HardenOptions,
 } from './security/harden-vue-markdown';
-import 'katex/dist/katex.min.css';
+// (Removed direct KaTeX CSS import to avoid bundling large base64 fonts.)
+// Consumers must import 'katex/dist/katex.min.css' themselves (as documented in README).
 
 export const StreamMarkdown = defineComponent({
     name: 'StreamMarkdown',
