@@ -70,7 +70,7 @@ const baseChunks: string[] = [
 let chunks: string[] = [...baseChunks];
 
 // Logging & metrics
-const log = (...a: any[]) => console.log('[stream-demo]', ...a);
+const log = (..._a: any[]) => {};
 const startTime = ref<number | null>(null);
 const lastChunkAt = ref<number | null>(null);
 const totalBytes = ref(0);
@@ -144,27 +144,7 @@ function pushNext(i: number) {
             chunks: chunkCount.value,
             avgBps: avgBps.value.toFixed(1),
         });
-        if (/\$\$/.test(input.value)) {
-            const m = input.value.match(/\$\$([\s\S]*?)\$\$/g);
-            if (m) {
-                console.log('[example App] math blocks found =', m.length);
-                m.forEach((blk, idx) =>
-                    console.log('[example App] math[' + idx + ']:\n' + blk)
-                );
-            }
-        }
-        const matrixMatch = input.value.match(
-            /\$\$[^$]*?\\begin\{matrix\}([\s\S]*?)\\end\{matrix\}[^$]*?\$\$/
-        );
-        if (matrixMatch) {
-            console.log(
-                '[example App] extracted matrix body raw:\n' + matrixMatch[0]
-            );
-        } else {
-            console.log(
-                '[example App] matrix pattern NOT matched in final markdown'
-            );
-        }
+        // (debug output removed)
         // run client tests after final render
         runClientTests();
         return;
@@ -175,16 +155,7 @@ function pushNext(i: number) {
         streaming.value = false;
         return;
     }
-    if (/\\\begin\{.*matrix\}/.test(piece) || /\$\$/.test(piece)) {
-        console.log(
-            '[example App] emitting chunk',
-            i,
-            'len=',
-            piece.length,
-            'matrixChunk=',
-            /\\\begin\{.*matrix\}/.test(piece)
-        );
-    }
+    // (debug per-chunk logging removed)
     input.value += piece;
     totalBytes.value += piece.length;
     chunkCount.value++;

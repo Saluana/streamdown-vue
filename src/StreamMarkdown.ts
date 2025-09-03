@@ -177,30 +177,11 @@ export const StreamMarkdown = defineComponent({
             // Light LaTeX preprocessing: only fix matrix row breaks.
             // We intentionally do NOT auto-escape stray $ anymore to avoid
             // breaking streaming scenarios where the closing delimiter arrives later.
-            if (
-                /\\begin\{.*matrix\}/.test(markdownSrc) ||
-                /\$\$/.test(markdownSrc)
-            ) {
-                console.log(
-                    '[StreamMarkdown] incoming content len=',
-                    markdownSrc.length
-                );
-            }
+            // (debug logging removed)
             let preprocessed = fixMatrix(markdownSrc);
             const afterFix = preprocessed;
             preprocessed = normalizeDisplayMath(preprocessed);
-            if (afterFix !== preprocessed) {
-                console.log(
-                    '[StreamMarkdown] after normalizeDisplayMath diffLen=',
-                    preprocessed.length - afterFix.length
-                );
-            }
-            if (preprocessed !== markdownSrc) {
-                console.log(
-                    '[StreamMarkdown] after fixMatrix diffLen=',
-                    preprocessed.length - markdownSrc.length
-                );
-            }
+            // (debug logging removed)
 
             const markdown = props.parseIncompleteMarkdown
                 ? parseIncompleteMarkdown(preprocessed)
@@ -246,53 +227,15 @@ export const StreamMarkdown = defineComponent({
             flush();
 
             const blocks = merged
-                .map((b, idx) => {
-                    if (/\\begin\{.*matrix\}/.test(b) || /\$\$/.test(b)) {
-                        console.log(
-                            '[StreamMarkdown] block',
-                            idx,
-                            'len=',
-                            b.length,
-                            'dollarPairs=',
-                            (b.match(/\$\$/g) || []).length
-                        );
-                    }
-                    return b;
-                })
+                .map((b) => b)
                 .map((b) =>
                     props.parseIncompleteMarkdown
                         ? parseIncompleteMarkdown(b.trim())
                         : b
                 );
-            blocks.forEach((b, idx) => {
-                if (/\\begin\{.*matrix\}/.test(b) || /\$\$/.test(b)) {
-                    console.log(
-                        '[StreamMarkdown] repaired block',
-                        idx,
-                        'len=',
-                        b.length,
-                        'pairs=',
-                        (b.match(/\$\$/g) || []).length
-                    );
-                }
-            });
-            const vnodes = blocks.flatMap((block, bi) => {
-                if (/\\begin\{.*matrix\}/.test(block)) {
-                    console.log(
-                        '[StreamMarkdown] BEFORE PARSE matrix block index',
-                        bi,
-                        '\n' + block
-                    );
-                }
+            // (debug logging removed)
+            const vnodes = blocks.flatMap((block) => {
                 const tree = processor.runSync(processor.parse(block)) as Root;
-                if (/\\begin\{.*matrix\}/.test(block)) {
-                    console.log(
-                        '[StreamMarkdown] AFTER PARSE matrix block index',
-                        bi,
-                        'children=',
-                        tree.children.length
-                    );
-                }
                 return renderChildren(tree.children as any[]);
             });
             const rootClass = [
