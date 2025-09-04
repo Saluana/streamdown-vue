@@ -180,25 +180,45 @@ export const StreamMarkdown = defineComponent({
                 if (text.trim()) markdownSrc = text;
             }
 
-            // --- Progressive fenced code support ---
-            // If streaming content currently ends with an unclosed fenced code block,
-            // temporarily append a virtual closing fence so the partial code becomes visible.
-            // Heuristic: count lines starting with optional spaces then ``` ; if odd, it's open.
-            // We ONLY do this prior to block parsing; final content (when balanced) is unchanged.
-            let virtualClosedFence = false;
-            if (props.parseIncompleteMarkdown && markdownSrc) {
+            // --- Progressive fenced code support (improved) ---
+            // Instead of appending a synthetic closing fence (which caused full re-parse + flicker),
+            // detect an OPEN fenced code block and render its partial contents directly as a CodeBlock
+            // while still parsing all *preceding* markdown normally. This avoids mutating the original
+            // markdown string and prevents reparsing the entire (synthetically closed) block each tick.
+            let openFenceInfo: null | {
+                prefix: string; // markdown before the open fence
+                code: string; // partial code collected so far (without trailing ```)
+                lang: string;
+            } = null;
+            if (
+                props.parseIncompleteMarkdown &&
+                typeof markdownSrc === 'string' &&
+                markdownSrc.length
+            ) {
                 const norm = markdownSrc.replace(/\r\n?/g, '\n');
                 const lines = norm.split('\n');
-                let fenceCount = 0;
-                for (const line of lines) {
-                    if (/^\s*```/.test(line)) fenceCount++;
+                let fenceIndices: number[] = [];
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i] ?? '';
+                    if (/^\s*```/.test(line)) fenceIndices.push(i);
                 }
-                if (fenceCount % 2 === 1) {
-                    // Ensure there is at least one newline after code content before closing fence
-                    // so remark-parse treats preceding lines as fenced code, not inline text.
-                    const needsNewline = !/\n$/.test(norm);
-                    markdownSrc = norm + (needsNewline ? '\n```' : '```');
-                    virtualClosedFence = true;
+                if (fenceIndices.length > 0 && fenceIndices.length % 2 === 1) {
+                    // Last fence is an opening fence with no close yet.
+                    const openIndex = fenceIndices[fenceIndices.length - 1]!; // length > 0 guarded
+                    const fenceLine = lines[openIndex] ?? '';
+                    const lang = fenceLine.replace(/^\s*```+/, '').trim();
+                    const codeLines =
+                        openIndex + 1 < lines.length
+                            ? lines.slice(openIndex + 1)
+                            : [];
+                    openFenceInfo = {
+                        prefix:
+                            openIndex > 0
+                                ? lines.slice(0, openIndex).join('\n')
+                                : '',
+                        code: codeLines.join('\n'),
+                        lang,
+                    };
                 }
             }
 
@@ -211,14 +231,16 @@ export const StreamMarkdown = defineComponent({
             preprocessed = normalizeDisplayMath(preprocessed);
             // (debug logging removed)
 
-            const markdown = props.parseIncompleteMarkdown
-                ? parseIncompleteMarkdown(preprocessed)
+            // If we have an open fence, we only parse the prefix markdown; the partial code is handled manually.
+            const toProcess = openFenceInfo
+                ? openFenceInfo.prefix
                 : preprocessed;
+            const markdown = props.parseIncompleteMarkdown
+                ? parseIncompleteMarkdown(toProcess)
+                : toProcess;
 
-            // First split into coarse blocks.
-            let rawBlocks = virtualClosedFence
-                ? [markdown]
-                : parseBlocks(markdown);
+            // First split into coarse blocks (only prefix portion if open fence in progress).
+            let rawBlocks = parseBlocks(markdown);
 
             // Merge consecutive blocks if, when concatenated, they resolve an odd $$ count
             // (i.e. an opening display math without its closing yet). This prevents splitting
@@ -269,44 +291,15 @@ export const StreamMarkdown = defineComponent({
                 return renderChildren(tree.children as any[]);
             });
 
-            // Fallback: if we used a virtual fence and no code body produced any text nodes,
-            // attempt manual extraction so partial code is visible.
-            if (virtualClosedFence) {
-                const hasVisibleCode = vnodes.some(
-                    (n: any) =>
-                        n &&
-                        n.props &&
-                        n.props['data-streamdown'] === 'code-block' &&
-                        /<span|<code|<pre/.test(
-                            (n.children && n.children[0]?.props?.innerHTML) ||
-                                ''
-                        )
+            // Append partial open fence code block if present
+            if (openFenceInfo) {
+                vnodes.push(
+                    h(CodeBlock, {
+                        code: openFenceInfo.code,
+                        language: openFenceInfo.lang,
+                        theme: props.shikiTheme,
+                    })
                 );
-                if (!hasVisibleCode) {
-                    const match = markdownSrc.match(
-                        /```([a-z0-9_-]+)?\n([\s\S]*?)```$/i
-                    );
-                    if (match) {
-                        const lang = (match[1] || '').trim();
-                        const code = match[2];
-                        // Remove matched segment from start portion
-                        const prefix = markdownSrc.slice(0, match.index);
-                        const prefixTree = processor.runSync(
-                            processor.parse(prefix)
-                        ) as Root;
-                        const prefixVNodes = renderChildren(
-                            (prefixTree.children as any[]) || []
-                        );
-                        vnodes = [
-                            ...prefixVNodes,
-                            h(CodeBlock, {
-                                code: code || '',
-                                language: lang,
-                                theme: props.shikiTheme,
-                            }),
-                        ];
-                    }
-                }
             }
             const rootClass = [
                 'streamdown-vue space-y-4',
