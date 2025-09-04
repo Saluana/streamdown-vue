@@ -14,6 +14,21 @@ export default defineComponent({
         let media: MediaQueryList | null = null;
         let render: () => Promise<void> = async () => {};
 
+        // SSR fallback: immediately render plain <pre><code> so code is visible before hydration.
+        if (typeof window === 'undefined') {
+            const esc = (s: string) =>
+                s
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+            const langClass = props.language
+                ? ` class=\"language-${props.language}\"`
+                : '';
+            html.value = `<pre${langClass}><code${langClass}>${esc(
+                props.code
+            )}</code></pre>`;
+        }
+
         onMounted(() => {
             media = window.matchMedia('(prefers-color-scheme: dark)');
             render = async () => {

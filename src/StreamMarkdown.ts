@@ -180,6 +180,28 @@ export const StreamMarkdown = defineComponent({
                 if (text.trim()) markdownSrc = text;
             }
 
+            // --- Progressive fenced code support ---
+            // If streaming content currently ends with an unclosed fenced code block,
+            // temporarily append a virtual closing fence so the partial code becomes visible.
+            // Heuristic: count lines starting with optional spaces then ``` ; if odd, it's open.
+            // We ONLY do this prior to block parsing; final content (when balanced) is unchanged.
+            let virtualClosedFence = false;
+            if (props.parseIncompleteMarkdown && markdownSrc) {
+                const norm = markdownSrc.replace(/\r\n?/g, '\n');
+                const lines = norm.split('\n');
+                let fenceCount = 0;
+                for (const line of lines) {
+                    if (/^\s*```/.test(line)) fenceCount++;
+                }
+                if (fenceCount % 2 === 1) {
+                    // Ensure there is at least one newline after code content before closing fence
+                    // so remark-parse treats preceding lines as fenced code, not inline text.
+                    const needsNewline = !/\n$/.test(norm);
+                    markdownSrc = norm + (needsNewline ? '\n```' : '```');
+                    virtualClosedFence = true;
+                }
+            }
+
             // Light LaTeX preprocessing: only fix matrix row breaks.
             // We intentionally do NOT auto-escape stray $ anymore to avoid
             // breaking streaming scenarios where the closing delimiter arrives later.
@@ -194,7 +216,9 @@ export const StreamMarkdown = defineComponent({
                 : preprocessed;
 
             // First split into coarse blocks.
-            let rawBlocks = parseBlocks(markdown);
+            let rawBlocks = virtualClosedFence
+                ? [markdown]
+                : parseBlocks(markdown);
 
             // Merge consecutive blocks if, when concatenated, they resolve an odd $$ count
             // (i.e. an opening display math without its closing yet). This prevents splitting
@@ -240,10 +264,50 @@ export const StreamMarkdown = defineComponent({
                         : b
                 );
             // (debug logging removed)
-            const vnodes = blocks.flatMap((block) => {
+            let vnodes = blocks.flatMap((block) => {
                 const tree = processor.runSync(processor.parse(block)) as Root;
                 return renderChildren(tree.children as any[]);
             });
+
+            // Fallback: if we used a virtual fence and no code body produced any text nodes,
+            // attempt manual extraction so partial code is visible.
+            if (virtualClosedFence) {
+                const hasVisibleCode = vnodes.some(
+                    (n: any) =>
+                        n &&
+                        n.props &&
+                        n.props['data-streamdown'] === 'code-block' &&
+                        /<span|<code|<pre/.test(
+                            (n.children && n.children[0]?.props?.innerHTML) ||
+                                ''
+                        )
+                );
+                if (!hasVisibleCode) {
+                    const match = markdownSrc.match(
+                        /```([a-z0-9_-]+)?\n([\s\S]*?)```$/i
+                    );
+                    if (match) {
+                        const lang = (match[1] || '').trim();
+                        const code = match[2];
+                        // Remove matched segment from start portion
+                        const prefix = markdownSrc.slice(0, match.index);
+                        const prefixTree = processor.runSync(
+                            processor.parse(prefix)
+                        ) as Root;
+                        const prefixVNodes = renderChildren(
+                            (prefixTree.children as any[]) || []
+                        );
+                        vnodes = [
+                            ...prefixVNodes,
+                            h(CodeBlock, {
+                                code: code || '',
+                                language: lang,
+                                theme: props.shikiTheme,
+                            }),
+                        ];
+                    }
+                }
+            }
             const rootClass = [
                 'streamdown-vue space-y-4',
                 props.class,

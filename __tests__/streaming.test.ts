@@ -46,4 +46,17 @@ describe('streaming render', () => {
         console.log('render time ms:', duration.toFixed(2));
         expect(duration).toBeLessThan(1000);
     });
+    it('progressive unclosed fenced code becomes visible', async () => {
+        const step1 = '```js\nconsole.log(1';
+        const app1 = h(StreamMarkdown, { content: step1 });
+        const html1 = await renderToString(app1);
+        expect(html1).toContain('data-streamdown="code-block"');
+        expect(html1).toContain('console.log(1');
+        const step2 = step1 + '\n```';
+        const app2 = h(StreamMarkdown, { content: step2 });
+        const html2 = await renderToString(app2);
+        expect(html2).toContain('console.log(1');
+        const occurrences = html2.split('console.log(1').length - 1;
+        expect(occurrences).toBe(1);
+    });
 });
