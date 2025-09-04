@@ -65,6 +65,8 @@ export const StreamMarkdown = defineComponent({
 
         props.rehypePlugins.forEach((p) => processor.use(ensurePlugin(p)));
 
+        props.rehypePlugins.forEach((p) => processor.use(ensurePlugin(p)));
+
         const hardenOptions: HardenOptions = {
             allowedImagePrefixes: props.allowedImagePrefixes,
             allowedLinkPrefixes: props.allowedLinkPrefixes,
@@ -203,14 +205,27 @@ export const StreamMarkdown = defineComponent({
                     if (/^\s*```/.test(line)) fenceIndices.push(i);
                 }
                 if (fenceIndices.length > 0 && fenceIndices.length % 2 === 1) {
-                    // Last fence is an opening fence with no close yet.
-                    const openIndex = fenceIndices[fenceIndices.length - 1]!; // length > 0 guarded
+                    const openIndex = fenceIndices[fenceIndices.length - 1]!;
                     const fenceLine = lines[openIndex] ?? '';
-                    const lang = fenceLine.replace(/^\s*```+/, '').trim();
+                    const afterTicks = fenceLine.replace(/^\s*```+/, '');
+                    let lang = '';
+                    let sameLineCode = '';
+                    if (afterTicks.trim().length) {
+                        const match = afterTicks.match(
+                            /^([a-zA-Z0-9_-]+)(\s+|$)(.*)$/
+                        );
+                        if (match) {
+                            lang = (match[1] || '').trim();
+                            sameLineCode = (match[3] || '').trimEnd();
+                        } else {
+                            sameLineCode = afterTicks.trimEnd();
+                        }
+                    }
                     const codeLines =
                         openIndex + 1 < lines.length
                             ? lines.slice(openIndex + 1)
                             : [];
+                    if (sameLineCode) codeLines.unshift(sameLineCode);
                     openFenceInfo = {
                         prefix:
                             openIndex > 0
@@ -298,6 +313,8 @@ export const StreamMarkdown = defineComponent({
                         code: openFenceInfo.code,
                         language: openFenceInfo.lang,
                         theme: props.shikiTheme,
+                        'data-open-fence': 'true',
+                        'data-streaming': 'true',
                     })
                 );
             }
