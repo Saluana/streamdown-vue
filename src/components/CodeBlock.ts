@@ -64,26 +64,51 @@ export default defineComponent({
         onBeforeUnmount(() => {
             if (media) media.removeEventListener('change', render);
         });
-        return () =>
-            h(
+        return () => {
+            // Outer container ensures padding does not cause absolute buttons to clip
+            return h(
                 'div',
                 {
-                    class: 'relative group rounded-md border bg-gray-50 dark:bg-gray-800 p-4',
+                    class: 'group rounded-md border bg-gray-50 dark:bg-gray-800 overflow-hidden',
                     'data-streamdown': 'code-block',
                 },
                 [
-                    h('div', { innerHTML: html.value }),
-                    props.language
-                        ? h(
-                              'span',
-                              {
-                                  class: 'absolute top-2 left-2 text-xs px-2 py-1 rounded bg-gray-200 dark:bg-gray-700 opacity-0 group-hover:opacity-100',
-                              },
-                              props.language
-                          )
-                        : null,
-                    h(CopyButton, { text: props.code }),
+                    // Header bar (language + copy) always visible; stable height avoids layout shift
+                    h(
+                        'div',
+                        {
+                            class: 'flex items-center justify-between text-xs px-2 py-1 border-b border-gray-200 dark:border-gray-700 bg-gray-100 dark:bg-gray-900 gap-2',
+                            'data-streamdown': 'code-block-header',
+                        },
+                        [
+                            props.language
+                                ? h(
+                                      'span',
+                                      {
+                                          class: 'px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px] leading-none tracking-wide',
+                                          'data-streamdown': 'code-lang',
+                                      },
+                                      props.language
+                                  )
+                                : h('span', {
+                                      class: 'h-4',
+                                      'data-streamdown': 'code-lang-empty',
+                                  }),
+                            h(CopyButton, {
+                                text: props.code,
+                                floating: false,
+                                'data-streamdown': 'copy-button',
+                            }),
+                        ]
+                    ),
+                    // Code body
+                    h('div', {
+                        innerHTML: html.value,
+                        class: 'px-4 py-3 overflow-x-auto',
+                        'data-streamdown': 'code-body',
+                    }),
                 ]
             );
+        };
     },
 });
