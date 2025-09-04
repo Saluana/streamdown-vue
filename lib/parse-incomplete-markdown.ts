@@ -316,7 +316,10 @@ const handleIncompleteBlockKatex = (text: string): string => {
     // Otherwise we'd split the environment across two display math blocks and break KaTeX.
     const beginCount = (text.match(/\\begin\{[^}]+\}/g) || []).length;
     const endCount = (text.match(/\\end\{[^}]+\}/g) || []).length;
-    if (beginCount > endCount) return text; // leave it open for next chunk
+    // If we have any imbalance in environments (either missing \end OR missing \begin),
+    // defer auto-closing so that KaTeX does not attempt to parse a malformed block
+    // which commonly triggers alignment (&) parse errors in streaming scenarios.
+    if (beginCount !== endCount) return text; // leave it open for next chunk
 
     // If we have an odd number, add closing $$
     // Check if this looks like a multi-line math block (contains newlines after opening $$)
