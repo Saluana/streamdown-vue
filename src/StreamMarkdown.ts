@@ -39,6 +39,7 @@ export const StreamMarkdown = defineComponent({
             default: () => ['https://', 'http://'],
         },
         parseIncompleteMarkdown: { type: Boolean, default: true },
+        shikiTheme: { type: String, default: 'github-light' },
     },
     setup(props, { slots }) {
         // Some bundlers (CJS builds) may wrap ESM-only remark/rehype plugins
@@ -153,7 +154,11 @@ export const StreamMarkdown = defineComponent({
                 if (lang === 'mermaid') {
                     return h(MermaidBlock, { code });
                 }
-                return h(CodeBlock, { code, language: lang });
+                return h(CodeBlock, {
+                    code,
+                    language: lang,
+                    theme: props.shikiTheme,
+                });
             }
 
             const comp = componentsMap[tag];

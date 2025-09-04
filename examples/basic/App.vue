@@ -64,6 +64,12 @@ const baseChunks: string[] = [
     'Allowed image: ![ok](https://cdn.example.com/img.png) Disallowed image: ![bad](http://bad.local/x.png)\n\n',
     '### 17. Matrix Math\n',
     '$$\\begin{matrix}1 & 2\\\\ 3 & 4\\end{matrix}$$\n',
+    '### 18. Syntax Highlight Sampler\n',
+    'Below are multiple fenced code blocks to exercise Shiki multi-language highlighting.\n',
+    '```python\nimport math\n\n# quick computation\nvals = [math.sin(x/10) for x in range(5)]\nprint(vals)\n```\n\n',
+    '```bash\n#!/usr/bin/env bash\nset -euo pipefail\necho "Highlight test" | tr a-z A-Z\n```\n\n',
+    '```json\n{"demo":true,"items":[1,2,3],"nested":{"ok":1}}\n```\n\n',
+    '```diff\n@@ Added feature @@\n+ new line\n- old line\n```\n\n',
 ];
 
 // Working chunks (mutable) so stress mode can expand.
@@ -109,6 +115,11 @@ async function runClientTests() {
         'code block present',
         !!root.querySelector('[data-streamdown="code-block"]')
     );
+    // Look for at least one span with an inline color style produced by Shiki
+    const shikiToken = !!root.querySelector(
+        '[data-streamdown="code-block"] span[style*="color:"]'
+    );
+    push('syntax highlighting applied', shikiToken);
     push('table present', !!root.querySelector('table'));
     push('task list checkbox', !!root.querySelector('input[type=checkbox]'));
     const badLink = Array.from(root.querySelectorAll('a')).some((a) =>

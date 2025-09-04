@@ -7,6 +7,7 @@ export default defineComponent({
     props: {
         code: { type: String, required: true },
         language: { type: String, default: '' },
+        theme: { type: String, default: 'github-light' },
     },
     setup(props) {
         const html = ref('');
@@ -18,9 +19,9 @@ export default defineComponent({
             render = async () => {
                 try {
                     const highlighter = await useShikiHighlighter();
-                    const theme = media!.matches
-                        ? 'github-dark'
-                        : 'github-light';
+                    const theme =
+                        props.theme ||
+                        (media!.matches ? 'github-dark' : 'github-light');
                     html.value = highlighter.codeToHtml(props.code, {
                         lang: props.language || 'txt',
                         theme,
@@ -29,7 +30,6 @@ export default defineComponent({
                     html.value = `<pre><code>${props.code}</code></pre>`;
                 }
             };
-            // initial render (no await so lifecycle registration remains sync)
             render();
             media.addEventListener('change', render);
         });

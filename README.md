@@ -171,6 +171,7 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 | `allowedImagePrefixes`    | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                 |
 | `allowedLinkPrefixes`     | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                              |
 | `parseIncompleteMarkdown` | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved. |
+| `shikiTheme`              | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                |
 
 All unrecognised props are ignored (no arbitrary HTML injection for safety).
 
@@ -267,6 +268,25 @@ const MyCode = defineComponent({
 
 <StreamMarkdown :components="{ codeblock: MyCode }" />
 ```
+
+### 9.1 Changing the Shiki Theme
+
+You can switch the built‑in highlighting theme via the `shikiTheme` prop (default: `github-light`):
+
+```vue
+<StreamMarkdown :content="md" shiki-theme="github-dark" />
+```
+
+Any valid Shiki theme name you have available can be passed. If you need multiple themes based on dark/light mode, you can conditionally bind the prop:
+
+```vue
+<StreamMarkdown
+    :content="md"
+    :shiki-theme="isDark ? 'github-dark' : 'github-light'"
+/>
+```
+
+> Note: The highlighter preloads a small set of common languages (ts, js, json, bash, python, diff, markdown, vue). Additional languages will be auto‑loaded by Shiki if requested.
 
 The default copy button uses the Clipboard API and toggles an icon for UX.
 
