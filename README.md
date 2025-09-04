@@ -200,16 +200,86 @@ If a tag is missing from `components` it falls back to the built-in map.
 
 Each semantic node receives a `data-streamdown="name"` attribute to make styling and querying reliable, even if classes are overridden:
 
-| Element               | Data Attribute                        | Notes                                |
-| --------------------- | ------------------------------------- | ------------------------------------ |
-| `p`                   | `p`                                   | paragraphs                           |
-| `a`                   | `a`                                   | links hardened (target+rel enforced) |
-| `code` (inline)       | `inline-code`                         | inside text flows                    |
-| Code block wrapper    | `code-block`                          | includes a copy button               |
-| `table`               | `table` + wrapper div `table-wrapper` | responsive overflow wrapper          |
-| `blockquote`          | `blockquote`                          |                                      |
-| Mermaid block wrapper | `mermaid`                             | async rendered SVG                   |
-| KaTeX output          | `katex` (from library)                | math formulas                        |
+| Element / Component        | Data Attribute      | Notes / Styling Hook                                                   |
+| -------------------------- | ------------------- | ---------------------------------------------------------------------- |
+| Paragraph `<p>`            | `p`                 | Base text blocks                                                       |
+| Anchor `<a>`               | `a`                 | Hardened links (target+rel enforced)                                   |
+| Inline code `<code>`       | `inline-code`       | Single backtick spans                                                  |
+| Code block wrapper         | `code-block`        | Outer container (header + body)                                        |
+| Code block header bar      | `code-block-header` | Holds language label + copy button                                     |
+| Code language badge        | `code-lang`         | Language label span                                                    |
+| Empty language placeholder | `code-lang-empty`   | Present when no language specified (reserved space)                    |
+| Copy button                | `copy-button`       | The actionable copy control                                            |
+| Code block body container  | `code-body`         | Wraps highlighted `<pre>`; horizontal scroll applied here              |
+| Unordered list `<ul>`      | `ul`                |                                                                        |
+| Ordered list `<ol>`        | `ol`                |                                                                        |
+| List item `<li>`           | `li`                |                                                                        |
+| Horizontal rule `<hr>`     | `hr`                |                                                                        |
+| Strong `<strong>`          | `strong`            | Bold emphasis                                                          |
+| Emphasis `<em>`            | `em`                | Italic emphasis                                                        |
+| Headings `<h1>`–`<h6>`     | `h1` … `h6`         | Each level individually tagged                                         |
+| Blockquote `<blockquote>`  | `blockquote`        |                                                                        |
+| Table `<table>`            | `table`             | Logical table element                                                  |
+| Table wrapper `<div>`      | `table-wrapper`     | Scroll container around table                                          |
+| Table head `<thead>`       | `thead`             |                                                                        |
+| Table body `<tbody>`       | `tbody`             |                                                                        |
+| Table row `<tr>`           | `tr`                |                                                                        |
+| Table header cell `<th>`   | `th`                |                                                                        |
+| Table data cell `<td>`     | `td`                |                                                                        |
+| Image `<img>`              | `img`               | Only if src passes hardening                                           |
+| Mermaid wrapper            | `mermaid`           | Replaced with rendered SVG / diagram                                   |
+| KaTeX output               | `katex`             | Class emitted by KaTeX (not set by us but styled via global KaTeX CSS) |
+
+### 7.1 Styling via Data Attributes
+
+Because every semantic node has a stable `data-streamdown` marker, you can author zero‑collision styles (or component library themes) without relying on brittle tag chains. Example – customize the code block body and header:
+
+```css
+/* Remove borders & add extra bottom padding inside code body */
+.message-body :deep([data-streamdown='code-body']) pre {
+    border: none;
+    margin-bottom: 0;
+    padding-bottom: 30px;
+}
+
+/* Header bar tweaks */
+.message-body :deep([data-streamdown='code-block-header']) {
+    background: linear-gradient(to right, #f5f5f5, #e8e8e8);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Language badge */
+.message-body :deep([data-streamdown='code-lang']) {
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Table wrapper scroll shadows */
+.message-body :deep([data-streamdown='table-wrapper']) {
+    position: relative;
+}
+.message-body :deep([data-streamdown='table-wrapper']::after) {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 12px;
+    pointer-events: none;
+    background: linear-gradient(
+        to right,
+        rgba(255, 255, 255, 0),
+        rgba(0, 0, 0, 0.08)
+    );
+}
+```
+
+Tips:
+
+1. Scope via a parent (e.g. `.message-body`) or component root to avoid leaking styles.
+2. Use `:deep()` (Vue SFC) / `::v-deep` where needed to pierce scoped boundaries.
+3. Prefer attribute selectors over tag names so overrides survive internal structural changes.
+4. For dark mode, pair selectors with media queries or a `.dark` ancestor.
 
 Testing example (Vitest / Bun):
 
