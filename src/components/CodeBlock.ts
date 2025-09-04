@@ -22,10 +22,37 @@ export default defineComponent({
                     const theme =
                         props.theme ||
                         (media!.matches ? 'github-dark' : 'github-light');
-                    html.value = highlighter.codeToHtml(props.code, {
-                        lang: props.language || 'txt',
-                        theme,
-                    });
+                    let lang = props.language || 'txt';
+                    try {
+                        html.value = highlighter.codeToHtml(props.code, {
+                            lang,
+                            theme,
+                        });
+                    } catch (e) {
+                        // Attempt dynamic language load (Shiki v3 supports on-demand add).
+                        try {
+                            // Avoid throwing if lang already registered under an alias.
+                            if (
+                                !highlighter.getLoadedLanguages().includes(lang)
+                            ) {
+                                await highlighter.loadLanguage(lang as any);
+                            }
+                            html.value = highlighter.codeToHtml(props.code, {
+                                lang,
+                                theme,
+                            });
+                        } catch (err) {
+                            // Final fallback: plain pre/code.
+                            console.debug(
+                                '[streamdown-vue] highlight fallback',
+                                {
+                                    lang,
+                                    err,
+                                }
+                            );
+                            html.value = `<pre><code>${props.code}</code></pre>`;
+                        }
+                    }
                 } catch {
                     html.value = `<pre><code>${props.code}</code></pre>`;
                 }
