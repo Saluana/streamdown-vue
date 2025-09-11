@@ -52,20 +52,49 @@ export const StreamMarkdown = defineComponent({
                 ? (p as any).default
                 : p;
 
+        // Detect if user provides their own remark-math (plain or tuple form)
+        const userSuppliesRemarkMath = props.remarkPlugins.some(
+            (entry: any) => {
+                const plugin = Array.isArray(entry) ? entry[0] : entry;
+                const resolved = ensurePlugin(plugin);
+                return resolved === remarkMath;
+            }
+        );
+
         const processor = unified()
             .use(ensurePlugin(remarkParse))
-            .use(ensurePlugin(remarkGfm))
-            .use(ensurePlugin(remarkMath));
+            .use(ensurePlugin(remarkGfm));
 
-        props.remarkPlugins.forEach((p) => processor.use(ensurePlugin(p)));
+        // Default: include remark-math but disable single-dollar inline math so currency like $390K is safe.
+        if (!userSuppliesRemarkMath) {
+            processor.use(ensurePlugin(remarkMath), {
+                singleDollarTextMath: false,
+            });
+        }
+
+        // Support [plugin, options] tuples for remark plugins
+        props.remarkPlugins.forEach((entry: any) => {
+            if (Array.isArray(entry)) {
+                const [plugin, options] = entry;
+                processor.use(ensurePlugin(plugin), options);
+            } else {
+                processor.use(ensurePlugin(entry));
+            }
+        });
 
         processor
             .use(ensurePlugin(remarkRehype), { allowDangerousHtml: false })
             .use(ensurePlugin(rehypeKatex));
 
-        props.rehypePlugins.forEach((p) => processor.use(ensurePlugin(p)));
-
-        props.rehypePlugins.forEach((p) => processor.use(ensurePlugin(p)));
+        // Support [plugin, options] tuples for rehype plugins (deduped loop)
+        props.rehypePlugins.forEach((entry: any) => {
+            if (Array.isArray(entry)) {
+                const [plugin, options] = entry;
+                processor.use(ensurePlugin(plugin), options);
+            } else {
+                processor.use(ensurePlugin(entry));
+            }
+        });
 
         const hardenOptions: HardenOptions = {
             allowedImagePrefixes: props.allowedImagePrefixes,

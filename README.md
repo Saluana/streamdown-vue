@@ -160,18 +160,18 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 
 ## 5. Props Reference
 
-| Prop                      | Type                       | Default                  | Description                                                                                              |
-| ------------------------- | -------------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- |
-| `content`                 | `string`                   | `''`                     | The full (or partially streamed) markdown source.                                                        |
-| `class` / `className`     | `string`                   | `''`                     | Optional wrapper classes; both accepted (React-style alias).                                             |
-| `components`              | `Record<string,Component>` | `{}`                     | Map to override built-ins (e.g. `{ p: MyP }`).                                                           |
-| `remarkPlugins`           | `any[]`                    | `[]`                     | Extra remark plugins (functions or default exports).                                                     |
-| `rehypePlugins`           | `any[]`                    | `[]`                     | Extra rehype plugins.                                                                                    |
-| `defaultOrigin`           | `string?`                  | `undefined`              | Base URL used to resolve relative links/images before allow‑list checks.                                 |
-| `allowedImagePrefixes`    | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                 |
-| `allowedLinkPrefixes`     | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                              |
-| `parseIncompleteMarkdown` | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved. |
-| `shikiTheme`              | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                |
+| Prop                      | Type                       | Default                  | Description                                                                                                                                                                     |
+| ------------------------- | -------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`                 | `string`                   | `''`                     | The full (or partially streamed) markdown source.                                                                                                                               |
+| `class` / `className`     | `string`                   | `''`                     | Optional wrapper classes; both accepted (React-style alias).                                                                                                                    |
+| `components`              | `Record<string,Component>` | `{}`                     | Map to override built-ins (e.g. `{ p: MyP }`).                                                                                                                                  |
+| `remarkPlugins`           | `any[]`                    | `[]`                     | Extra remark plugins. Supports `(plugin)` or `[plugin, options]`. If you supply `remark-math` yourself, the built‑in one (which disables single‑dollar inline math) is skipped. |
+| `rehypePlugins`           | `any[]`                    | `[]`                     | Extra rehype plugins.                                                                                                                                                           |
+| `defaultOrigin`           | `string?`                  | `undefined`              | Base URL used to resolve relative links/images before allow‑list checks.                                                                                                        |
+| `allowedImagePrefixes`    | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                                                                                        |
+| `allowedLinkPrefixes`     | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
+| `parseIncompleteMarkdown` | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
+| `shikiTheme`              | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                                                                                       |
 
 All unrecognised props are ignored (no arbitrary HTML injection for safety).
 
@@ -385,7 +385,31 @@ You can override it via `components` if you need advanced theming.
 
 ## 11. Math & LaTeX Helpers
 
-By default the pipeline runs `remark-math` / `rehype-katex` for `$$...$$` and inline `$...$` with **no pre‑munging of dollar signs** (to keep streaming safe when a closing `$` may arrive later). Optional helpers you can call yourself before rendering:
+### 11.1 Default behavior
+
+`StreamMarkdown` automatically injects `remark-math` + `rehype-katex` _unless you supply your own_ via the `remarkPlugins` prop. The built‑in configuration intentionally sets `singleDollarTextMath: false` so that plain currency like `$390K` or `$80–140K` is **not** misinterpreted as inline math (a common issue during streaming where a later `$` closes a huge unintended span).
+
+Supported by default:
+
+-   Display math: `$$ ... $$`
+-   (If you add them) Inline math via `\( ... \)` or by providing your own `remark-math` with single‑dollar enabled.
+
+### 11.2 Opting into single‑dollar inline math
+
+If you really want `$x + y$` style inline math, provide your own configured plugin tuple. When you do this the built‑in math plugin is skipped:
+
+```ts
+import remarkMath from 'remark-math';
+
+<StreamMarkdown
+    :content="md"
+    :remark-plugins="[[remarkMath, { singleDollarTextMath: true }]]"
+/>
+```
+
+### 11.3 Optional helper utilities
+
+We still expose some light repair helpers you can (optionally) run yourself before streaming completes:
 
 | Helper              | Purpose (opt‑in)                                                       |
 | ------------------- | ---------------------------------------------------------------------- |
@@ -400,7 +424,7 @@ import { fixMatrix, fixDollarSignMath } from 'streamdown-vue';
 const safe = fixMatrix(fixDollarSignMath(markdown));
 ```
 
-In streaming scenarios prefer leaving `$` untouched until you know a delimiter is unmatched at the final flush.
+In streaming scenarios prefer leaving dollar signs untouched; the default config already avoids accidental inline math.
 
 ---
 
