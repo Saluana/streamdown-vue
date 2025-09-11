@@ -13,6 +13,8 @@ let timer: number | null = null;
 // Base demo chunk sequence (could come from a real server stream).
 // We'll clone / extend this for stress testing.
 const baseChunks: string[] = [
+    '$ BROKEN $\n\n',
+    '$ 100 dollars x 100x $\n\n',
     '# Hello Vuedown Streaming Demo\n\n',
     'This content arrives in small chunks to simulate a live AI / notes feed.\n\n',
     '## 1. Quick Bullets\n- One\n',
@@ -188,6 +190,22 @@ async function runClientTests() {
         (k) => /1\/3/.test(k.textContent || '') && /1/.test(k.textContent || '')
     );
     push('matrix rendered', matrix);
+    // Test: single-dollar inline math should NOT be auto-parsed by default configuration.
+    // We included `$E=mc^2$` and `$a^2 + b^2 = c^2$` in the stream. They should appear as plain text,
+    // i.e. not inside any .katex node because singleDollarTextMath is disabled by default.
+    const inlineInKatex = Array.from(root.querySelectorAll('.katex')).some(
+        (k) => /E=mc\^2|a\^2 \+ b\^2 = c\^2/.test(k.textContent || '')
+    );
+    push(
+        'single-dollar inline NOT rendered as math',
+        !inlineInKatex,
+        inlineInKatex ? 'inline dollars unexpectedly parsed' : undefined
+    );
+    push(
+        '$ HELLO MY MAN $',
+        !inlineInKatex,
+        inlineInKatex ? 'inline dollars unexpectedly parsed' : undefined
+    );
     testResults.value = results;
     runningTests.value = false;
 }
