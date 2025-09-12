@@ -1,17 +1,22 @@
-import { defineComponent, h, ref } from 'vue';
+import { defineComponent, h, ref, inject } from 'vue';
 import { Copy, Check } from 'lucide-vue-next';
+import { CODE_BLOCK_META_KEY } from './codeblock-context';
 
 export default defineComponent({
     name: 'CopyButton',
     props: {
-        text: { type: String, required: true },
+        // text is optional now; will default to injected code.
+        text: { type: String, required: false },
         floating: { type: Boolean, default: true },
     },
     setup(props) {
         const copied = ref(false);
+        const meta = inject(CODE_BLOCK_META_KEY, { code: '', language: '' });
         const copy = async () => {
             try {
-                await navigator.clipboard?.writeText(props.text);
+                const txt = props.text ?? meta.code;
+                if (!txt) return;
+                await navigator.clipboard?.writeText(txt);
                 copied.value = true;
                 setTimeout(() => {
                     copied.value = false;

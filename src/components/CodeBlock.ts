@@ -9,7 +9,14 @@ import {
     nextTick,
 } from 'vue';
 import CopyButton from './CopyButton';
+import DownloadButton from './DownloadButton';
 import { useShikiHighlighter } from '../use-shiki-highlighter';
+import {
+    CODE_BLOCK_META_KEY,
+    GLOBAL_CODE_BLOCK_ACTIONS,
+    type CodeBlockAction,
+} from './codeblock-context';
+import { provide, inject } from 'vue';
 
 export default defineComponent({
     name: 'CodeBlock',
@@ -17,9 +24,26 @@ export default defineComponent({
         code: { type: String, required: true },
         language: { type: String, default: '' },
         theme: { type: String, default: 'github-light' },
+        showLineNumbers: { type: Boolean, default: false },
+        selectable: { type: Boolean, default: true },
+        // Array of extra action components (or render functions) appended to header right side.
+        actions: { type: Array as () => CodeBlockAction[], default: () => [] },
+        // Hide built-in copy or download buttons if user wants total control.
+        hideCopy: { type: Boolean, default: false },
+        hideDownload: { type: Boolean, default: false },
     },
-    setup(props, { attrs }) {
+    setup(props, { attrs, slots }) {
         const html = ref('');
+        // Provide code & language for nested buttons
+        provide(CODE_BLOCK_META_KEY, {
+            get code() {
+                return props.code;
+            },
+            get language() {
+                return props.language;
+            },
+        } as any);
+        const globalActions = inject(GLOBAL_CODE_BLOCK_ACTIONS, [] as any[]);
         let media: MediaQueryList | null = null;
         let render: () => Promise<void> = async () => {};
         // token to avoid race condition when rapid streaming updates trigger overlapping async renders
@@ -33,12 +57,69 @@ export default defineComponent({
                     .replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;');
             const langClass = props.language
-                ? ` class=\"language-${props.language}\"`
+                ? `language-${props.language}`
                 : '';
-            html.value = `<pre${langClass}><code${langClass}>${esc(
-                props.code
-            )}</code></pre>`;
+            const basePreClasses = [langClass];
+            if (!props.selectable) basePreClasses.push('select-none');
+            let codeInner: string;
+            if (props.showLineNumbers) {
+                const lines = props.code.split(/\r?\n/);
+                codeInner = lines
+                    .map(
+                        (ln, i) =>
+                            `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number>${
+                                i + 1
+                            }</span>${esc(ln)}</span>`
+                    )
+                    .join('\n');
+            } else {
+                codeInner = esc(props.code);
+            }
+            const preClassAttr = basePreClasses.filter(Boolean).length
+                ? ` class="${basePreClasses.join(' ')}"`
+                : '';
+            const codeClassAttr = langClass ? ` class="${langClass}"` : '';
+            html.value = `<pre${preClassAttr}><code${codeClassAttr}>${codeInner}</code></pre>`;
         }
+
+        const stripPreBackground = (s: string): string => {
+            // remove inline background declarations from <pre style="..."> attributes
+            return s.replace(
+                /(<pre[^>]*style=")([^"]*)("[^>]*>)/g,
+                (m, p1, style, p3) => {
+                    const cleaned = style
+                        .split(/;\s*/)
+                        .filter(
+                            (decl: string) =>
+                                decl &&
+                                !/background(-color)?\s*:/.test(
+                                    decl.toLowerCase()
+                                )
+                        )
+                        .join('; ');
+                    return `${p1}${cleaned}${p3}`.replace(/style=""/, '');
+                }
+            );
+        };
+
+        const addLineNumbers = (s: string): string => {
+            if (!props.showLineNumbers) return s;
+            // naive approach: find each <span class="line"> occurrence
+            let lineNo = 0;
+            return s.replace(/<span class="line(.*?)">/g, (match, rest) => {
+                lineNo += 1;
+                return `<span class="line${rest}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number>${lineNo}</span>`;
+            });
+        };
+
+        const ensureSelectable = (s: string): string => {
+            if (props.selectable) return s;
+            return s.replace('<pre', '<pre class="select-none"');
+        };
+
+        const processOutput = (raw: string): string => {
+            return ensureSelectable(addLineNumbers(stripPreBackground(raw)));
+        };
 
         const doHighlight = async () => {
             const currentToken = ++renderToken;
@@ -68,11 +149,13 @@ export default defineComponent({
                 }
                 // Only commit if this is the latest async render
                 if (currentToken === renderToken) {
-                    html.value = out;
+                    html.value = processOutput(out);
                 }
             } catch {
                 if (currentToken === renderToken) {
-                    html.value = `<pre><code>${props.code}</code></pre>`;
+                    html.value = processOutput(
+                        `<pre><code>${props.code}</code></pre>`
+                    );
                 }
             }
         };
@@ -127,11 +210,46 @@ export default defineComponent({
                                       class: 'h-4',
                                       'data-streamdown': 'code-lang-empty',
                                   }),
-                            h(CopyButton, {
-                                text: props.code,
-                                floating: false,
-                                'data-streamdown': 'copy-button',
-                            }),
+                            h(
+                                'div',
+                                {
+                                    class: 'flex items-center gap-1',
+                                    'data-streamdown': 'code-actions',
+                                },
+                                [
+                                    // user supplied actions (prop)
+                                    ...props.actions.map((A: any, idx) =>
+                                        h(A, {
+                                            key: idx,
+                                            code: props.code,
+                                            language: props.language,
+                                        })
+                                    ),
+                                    // global injected actions
+                                    ...globalActions.map((A: any, idx) =>
+                                        h(A, {
+                                            key: `g-${idx}`,
+                                            code: props.code,
+                                            language: props.language,
+                                        })
+                                    ),
+                                    // slot based actions (<template #actions>)
+                                    ...(slots.actions ? slots.actions() : []),
+                                    !props.hideDownload
+                                        ? h(DownloadButton, {
+                                              floating: false,
+                                              'data-streamdown':
+                                                  'download-button',
+                                          })
+                                        : null,
+                                    !props.hideCopy
+                                        ? h(CopyButton, {
+                                              floating: false,
+                                              'data-streamdown': 'copy-button',
+                                          })
+                                        : null,
+                                ].filter(Boolean)
+                            ),
                         ]
                     ),
                     // Code body

@@ -14,7 +14,7 @@
 6. Component Slots & Overrides
 7. Built‑in Components & Data Attributes
 8. Security Model (Link/Image hardening)
-9. Syntax Highlighting (Shiki) & Copy Buttons
+9. Syntax Highlighting (Shiki), Copy / Download & Extensible Actions
 10. Mermaid Diagrams
 11. Math & LaTeX Fixes
 12. Utilities (`parseBlocks`, `parseIncompleteMarkdown`, LaTeX helpers)
@@ -30,7 +30,8 @@
 
 -   GitHub‑flavored Markdown (tables, task lists, strikethrough) via `remark-gfm`
 -   KaTeX math (`remark-math` + `rehype-katex`) with extra repairs (matrices, stray `$`)
--   Shiki syntax highlighting (light + dark themes) with reactive copy buttons
+-   Shiki syntax highlighting (light + dark themes) with reactive copy & download buttons
+    and an extensible action bar (add your own buttons globally or per-instance)
 -   Mermaid diagrams with caching, async render & graceful error recovery
 -   Incremental rendering + repair of incomplete Markdown tokens while streaming
 -   Secure allow‑list based hardening of link & image URLs (blocks `javascript:` etc.)
@@ -160,18 +161,23 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 
 ## 5. Props Reference
 
-| Prop                      | Type                       | Default                  | Description                                                                                                                                                                     |
-| ------------------------- | -------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `content`                 | `string`                   | `''`                     | The full (or partially streamed) markdown source.                                                                                                                               |
-| `class` / `className`     | `string`                   | `''`                     | Optional wrapper classes; both accepted (React-style alias).                                                                                                                    |
-| `components`              | `Record<string,Component>` | `{}`                     | Map to override built-ins (e.g. `{ p: MyP }`).                                                                                                                                  |
-| `remarkPlugins`           | `any[]`                    | `[]`                     | Extra remark plugins. Supports `(plugin)` or `[plugin, options]`. If you supply `remark-math` yourself, the built‑in one (which disables single‑dollar inline math) is skipped. |
-| `rehypePlugins`           | `any[]`                    | `[]`                     | Extra rehype plugins.                                                                                                                                                           |
-| `defaultOrigin`           | `string?`                  | `undefined`              | Base URL used to resolve relative links/images before allow‑list checks.                                                                                                        |
-| `allowedImagePrefixes`    | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                                                                                        |
-| `allowedLinkPrefixes`     | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
-| `parseIncompleteMarkdown` | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
-| `shikiTheme`              | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                                                                                       |
+| Prop                       | Type                       | Default                  | Description                                                                                                                                                                     |
+| -------------------------- | -------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `content`                  | `string`                   | `''`                     | The full (or partially streamed) markdown source.                                                                                                                               |
+| `class` / `className`      | `string`                   | `''`                     | Optional wrapper classes; both accepted (React-style alias).                                                                                                                    |
+| `components`               | `Record<string,Component>` | `{}`                     | Map to override built-ins (e.g. `{ p: MyP }`).                                                                                                                                  |
+| `remarkPlugins`            | `any[]`                    | `[]`                     | Extra remark plugins. Supports `(plugin)` or `[plugin, options]`. If you supply `remark-math` yourself, the built‑in one (which disables single‑dollar inline math) is skipped. |
+| `rehypePlugins`            | `any[]`                    | `[]`                     | Extra rehype plugins.                                                                                                                                                           |
+| `defaultOrigin`            | `string?`                  | `undefined`              | Base URL used to resolve relative links/images before allow‑list checks.                                                                                                        |
+| `allowedImagePrefixes`     | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                                                                                        |
+| `allowedLinkPrefixes`      | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
+| `parseIncompleteMarkdown`  | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
+| `shikiTheme`               | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                                                                                       |
+| `codeBlockActions`         | `Component[]`              | `[]`                     | Array of Vue components appended as action buttons in every code block header.                                                                                                  |
+| `codeBlockShowLineNumbers` | `boolean`                  | `false`                  | Show line numbers in all code fences.                                                                                                                                           |
+| `codeBlockSelectable`      | `boolean`                  | `true`                   | Whether code text is selectable (adds `select-none` when false).                                                                                                                |
+| `codeBlockHideCopy`        | `boolean`                  | `false`                  | Globally hide built‑in copy buttons (you can add your own via actions).                                                                                                         |
+| `codeBlockHideDownload`    | `boolean`                  | `false`                  | Globally hide built‑in download buttons.                                                                                                                                        |
 
 All unrecognised props are ignored (no arbitrary HTML injection for safety).
 
@@ -311,7 +317,7 @@ Example – allow only your CDN images & HTTPS links:
 
 ---
 
-## 9. Syntax Highlighting (Shiki) & Copy Buttons
+## 9. Syntax Highlighting (Shiki), Copy / Download & Extensible Actions
 
 Code fences are rendered by the internal `CodeBlock` component:
 
@@ -358,7 +364,115 @@ Any valid Shiki theme name you have available can be passed. If you need multipl
 
 > Note: The highlighter preloads a small set of common languages (ts, js, json, bash, python, diff, markdown, vue). Additional languages will be auto‑loaded by Shiki if requested.
 
-The default copy button uses the Clipboard API and toggles an icon for UX.
+### 9.2 Built‑in CodeBlock Features
+
+`CodeBlock` now provides:
+
+| Feature                    | Prop / Mechanism              | Default | Notes                                                            |
+| -------------------------- | ----------------------------- | ------- | ---------------------------------------------------------------- |
+| Copy button                | `hideCopy` (boolean)          | `false` | Uses Clipboard API; auto‑binds code via context.                 |
+| Download button            | `hideDownload` (boolean)      | `false` | Generates file with inferred extension (lightweight mapping).    |
+| Line numbers               | `showLineNumbers` (boolean)   | `false` | Injects `<span class="code-line-number">` prefixes.              |
+| Selectability toggle       | `selectable` (boolean)        | `true`  | Adds `select-none` on `<pre>` when disabled.                     |
+| Per‑block custom actions   | `:actions="[MyBtn]"`          | `[]`    | Array of components/render fns appended right of header.         |
+| Slot actions               | `<template #actions>`         | —       | Slot for ad‑hoc buttons (highest flexibility).                   |
+| Global actions             | App `provide`                 | —       | Provide once: `app.provide(GLOBAL_CODE_BLOCK_ACTIONS, [MyBtn])`. |
+| Context access for actions | `inject(CODE_BLOCK_META_KEY)` | —       | Retrieve `{ code, language }` without prop drilling.             |
+
+### 9.3 Adding Custom Action Buttons (Without Forking)
+
+You normally only use `<StreamMarkdown>`; customize all code blocks via pass‑through props:
+
+```vue
+<StreamMarkdown
+    :content="md"
+    :code-block-actions="[MyShareButton]"
+    code-block-show-line-numbers
+    code-block-hide-download
+/>
+```
+
+Or override the internal code block entirely through `components` map (key: `codeblock`):
+
+```ts
+const Minimal = defineComponent({
+    props: { code: String, language: String },
+    setup(p) { return () => h('pre', [h('code', p.code)]) }
+});
+
+<StreamMarkdown :components="{ codeblock: Minimal }" :content="md" />
+```
+
+Per instance:
+
+```vue
+<CodeBlock
+    :code="snippet"
+    language="ts"
+    :actions="[MyShareButton, MyRunButton]"
+/>
+```
+
+Or via named slot:
+
+```vue
+<CodeBlock :code="snippet" language="ts">
+    <template #actions>
+        <MyShareButton />
+        <MyRunButton />
+    </template>
+</CodeBlock>
+```
+
+Globally (main.ts):
+
+```ts
+import { GLOBAL_CODE_BLOCK_ACTIONS } from 'streamdown-vue';
+app.provide(GLOBAL_CODE_BLOCK_ACTIONS, [MyShareButton]);
+```
+
+Inside a custom button component you can access the current code & language without props:
+
+```ts
+import { defineComponent, inject } from 'vue';
+import { CODE_BLOCK_META_KEY } from 'streamdown-vue';
+
+export const MyShareButton = defineComponent({
+    setup() {
+        const meta = inject(CODE_BLOCK_META_KEY)!; // { code, language }
+        const share = () => navigator.share?.({ text: meta.code });
+        return () => <button onClick={share}>Share</button>;
+    },
+});
+```
+
+### 9.4 Hiding Built‑ins
+
+If you want a fully custom action bar:
+
+```vue
+<CodeBlock
+    :code="snippet"
+    language="ts"
+    hide-copy
+    hide-download
+    :actions="[MyShareButton]"
+/>
+```
+
+### 9.5 Styling Line Numbers
+
+Line numbers render as `<span class="code-line-number" data-line-number>`. Example Tailwind tweaks:
+
+```css
+[data-streamdown='code-body'] .code-line-number {
+    @apply text-gray-400 dark:text-gray-500 select-none;
+}
+```
+
+The default copy & download buttons can be selectively hidden while still using custom actions.
+
+The default copy button uses the Clipboard API and toggles an icon for UX; the download button creates a Blob and triggers a synthetic click.
 
 ---
 
@@ -610,13 +724,13 @@ const { rendered, start } = useStreamedMarkdown('/api/chat');
 
 ### 14.10 Troubleshooting
 
-| Symptom                  | Fix                                                                                      |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| Copy button not showing  | Ensure default `CodeBlock` not overridden or your custom block renders the button.       |
-| Links stripped           | Adjust `allowed-link-prefixes` / set `default-origin` to resolve relative paths first.   |
-| Images missing           | Add CDN prefix to `allowed-image-prefixes`.                                              |
-| Flash of unstyled math   | Confirm KaTeX CSS loaded in client plugin before first render.                           |
-| High CPU on huge streams | Throttle updates (wrap repair/render in `requestAnimationFrame` or batch by char count). |
+| Symptom                            | Fix                                                                                                                          |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Copy / Download button not showing | Ensure default `CodeBlock` not overridden or your custom block renders desired buttons (remove `hideCopy` / `hideDownload`). |
+| Links stripped                     | Adjust `allowed-link-prefixes` / set `default-origin` to resolve relative paths first.                                       |
+| Images missing                     | Add CDN prefix to `allowed-image-prefixes`.                                                                                  |
+| Flash of unstyled math             | Confirm KaTeX CSS loaded in client plugin before first render.                                                               |
+| High CPU on huge streams           | Throttle updates (wrap repair/render in `requestAnimationFrame` or batch by char count).                                     |
 
 That’s it—Nuxt integration is essentially drop‑in plus an optional streaming composable.
 

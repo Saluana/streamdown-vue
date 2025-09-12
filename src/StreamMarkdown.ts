@@ -40,6 +40,12 @@ export const StreamMarkdown = defineComponent({
         },
         parseIncompleteMarkdown: { type: Boolean, default: true },
         shikiTheme: { type: String, default: 'github-light' },
+        // --- CodeBlock pass-through customization ---
+        codeBlockActions: { type: Array as () => any[], default: () => [] },
+        codeBlockShowLineNumbers: { type: Boolean, default: false },
+        codeBlockSelectable: { type: Boolean, default: true },
+        codeBlockHideCopy: { type: Boolean, default: false },
+        codeBlockHideDownload: { type: Boolean, default: false },
     },
     setup(props, { slots }) {
         // Some bundlers (CJS builds) may wrap ESM-only remark/rehype plugins
@@ -185,10 +191,17 @@ export const StreamMarkdown = defineComponent({
                 if (lang === 'mermaid') {
                     return h(MermaidBlock, { code });
                 }
-                return h(CodeBlock, {
+                const CodeComp =
+                    (componentsMap['codeblock'] as any) || CodeBlock;
+                return h(CodeComp, {
                     code,
                     language: lang,
                     theme: props.shikiTheme,
+                    actions: props.codeBlockActions,
+                    showLineNumbers: props.codeBlockShowLineNumbers,
+                    selectable: props.codeBlockSelectable,
+                    hideCopy: props.codeBlockHideCopy,
+                    hideDownload: props.codeBlockHideDownload,
                 });
             }
 
@@ -337,11 +350,18 @@ export const StreamMarkdown = defineComponent({
 
             // Append partial open fence code block if present
             if (openFenceInfo) {
+                const CodeComp =
+                    (componentsMap['codeblock'] as any) || CodeBlock;
                 vnodes.push(
-                    h(CodeBlock, {
+                    h(CodeComp, {
                         code: openFenceInfo.code,
                         language: openFenceInfo.lang,
                         theme: props.shikiTheme,
+                        actions: props.codeBlockActions,
+                        showLineNumbers: props.codeBlockShowLineNumbers,
+                        selectable: props.codeBlockSelectable,
+                        hideCopy: props.codeBlockHideCopy,
+                        hideDownload: props.codeBlockHideDownload,
                         'data-open-fence': 'true',
                         'data-streaming': 'true',
                     })
