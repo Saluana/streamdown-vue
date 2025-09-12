@@ -67,7 +67,7 @@ export default defineComponent({
                 codeInner = lines
                     .map(
                         (ln, i) =>
-                            `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number>${
+                            `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${
                                 i + 1
                             }</span>${esc(ln)}</span>`
                     )
@@ -108,7 +108,7 @@ export default defineComponent({
             let lineNo = 0;
             return s.replace(/<span class="line(.*?)">/g, (match, rest) => {
                 lineNo += 1;
-                return `<span class="line${rest}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number>${lineNo}</span>`;
+                return `<span class="line${rest}"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${lineNo}</span>`;
             });
         };
 

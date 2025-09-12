@@ -48,6 +48,7 @@ describe('CodeBlock feature matrix', () => {
         const html = await renderMD(md, { codeBlockShowLineNumbers: true });
         const count = html.match(/code-line-number/g)?.length || 0;
         expect(count).toBeGreaterThanOrEqual(2);
+        expect(html).toContain('data-streamdown="code-line-number"');
     });
 
     it('respects selectable=false (adds select-none to pre)', async () => {
@@ -130,6 +131,7 @@ describe('CodeBlock feature matrix', () => {
         });
         const count = html.match(/code-line-number/g)?.length || 0;
         expect(count).toBeGreaterThanOrEqual(2);
+        expect(html).toContain('data-streamdown="code-line-number"');
         expect(html).toMatch(/<pre[^>]*select-none/);
         expect(html).not.toContain('copy-button');
         expect(html).not.toContain('download-button');

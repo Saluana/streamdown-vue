@@ -368,16 +368,16 @@ Any valid Shiki theme name you have available can be passed. If you need multipl
 
 `CodeBlock` now provides:
 
-| Feature                    | Prop / Mechanism              | Default | Notes                                                            |
-| -------------------------- | ----------------------------- | ------- | ---------------------------------------------------------------- |
-| Copy button                | `hideCopy` (boolean)          | `false` | Uses Clipboard API; auto‑binds code via context.                 |
-| Download button            | `hideDownload` (boolean)      | `false` | Generates file with inferred extension (lightweight mapping).    |
-| Line numbers               | `showLineNumbers` (boolean)   | `false` | Injects `<span class="code-line-number">` prefixes.              |
-| Selectability toggle       | `selectable` (boolean)        | `true`  | Adds `select-none` on `<pre>` when disabled.                     |
-| Per‑block custom actions   | `:actions="[MyBtn]"`          | `[]`    | Array of components/render fns appended right of header.         |
-| Slot actions               | `<template #actions>`         | —       | Slot for ad‑hoc buttons (highest flexibility).                   |
-| Global actions             | App `provide`                 | —       | Provide once: `app.provide(GLOBAL_CODE_BLOCK_ACTIONS, [MyBtn])`. |
-| Context access for actions | `inject(CODE_BLOCK_META_KEY)` | —       | Retrieve `{ code, language }` without prop drilling.             |
+| Feature                    | Prop / Mechanism              | Default | Notes                                                                                  |
+| -------------------------- | ----------------------------- | ------- | -------------------------------------------------------------------------------------- |
+| Copy button                | `hideCopy` (boolean)          | `false` | Uses Clipboard API; auto‑binds code via context.                                       |
+| Download button            | `hideDownload` (boolean)      | `false` | Generates file with inferred extension (lightweight mapping).                          |
+| Line numbers               | `showLineNumbers` (boolean)   | `false` | Injects `<span class="code-line-number" data-streamdown="code-line-number">` prefixes. |
+| Selectability toggle       | `selectable` (boolean)        | `true`  | Adds `select-none` on `<pre>` when disabled.                                           |
+| Per‑block custom actions   | `:actions="[MyBtn]"`          | `[]`    | Array of components/render fns appended right of header.                               |
+| Slot actions               | `<template #actions>`         | —       | Slot for ad‑hoc buttons (highest flexibility).                                         |
+| Global actions             | App `provide`                 | —       | Provide once: `app.provide(GLOBAL_CODE_BLOCK_ACTIONS, [MyBtn])`.                       |
+| Context access for actions | `inject(CODE_BLOCK_META_KEY)` | —       | Retrieve `{ code, language }` without prop drilling.                                   |
 
 ### 9.3 Adding Custom Action Buttons (Without Forking)
 
@@ -462,7 +462,7 @@ If you want a fully custom action bar:
 
 ### 9.5 Styling Line Numbers
 
-Line numbers render as `<span class="code-line-number" data-line-number>`. Example Tailwind tweaks:
+Line numbers render as `<span class="code-line-number" data-line-number data-streamdown="code-line-number">`. Example Tailwind tweaks:
 
 ```css
 [data-streamdown='code-body'] .code-line-number {
