@@ -77,7 +77,10 @@ export default defineComponent({
                               error.value
                           )
                         : null,
-                    h(CopyButton, { text: props.code }),
+                    h(CopyButton, {
+                        text: props.code,
+                        'data-streamdown': 'copy-button',
+                    }),
                 ]
             );
     },
