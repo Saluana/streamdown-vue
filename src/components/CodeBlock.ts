@@ -79,7 +79,7 @@ export default defineComponent({
                 ? ` class="${basePreClasses.join(' ')}"`
                 : '';
             const codeClassAttr = langClass ? ` class="${langClass}"` : '';
-            html.value = `<pre${preClassAttr}><code${codeClassAttr}>${codeInner}</code></pre>`;
+            html.value = `<pre data-streamdown="pre"${preClassAttr}><code data-streamdown="code"${codeClassAttr}>${codeInner}</code></pre>`;
         }
 
         const stripPreBackground = (s: string): string => {
@@ -118,7 +118,23 @@ export default defineComponent({
         };
 
         const processOutput = (raw: string): string => {
-            return ensureSelectable(addLineNumbers(stripPreBackground(raw)));
+            const base = ensureSelectable(
+                addLineNumbers(stripPreBackground(raw))
+            );
+            return addDataStreamdown(base);
+        };
+
+        const addDataStreamdown = (s: string): string => {
+            // Add data-streamdown to <pre> and <code> inside block output if missing
+            const withPre = s.replace(
+                /<pre(?![^>]*data-streamdown=)/g,
+                '<pre data-streamdown="pre"'
+            );
+            const withCode = withPre.replace(
+                /<code(?![^>]*data-streamdown=)/g,
+                '<code data-streamdown="code"'
+            );
+            return withCode;
         };
 
         const doHighlight = async () => {

@@ -33,6 +33,8 @@ describe('CodeBlock feature matrix', () => {
         // Copy button has sr-only label ; Download has title attr
         expect(html).toMatch(/copy-button/);
         expect(html).toMatch(/download-button/);
+        expect(html).toMatch(/<pre[^>]*data-streamdown="pre"/);
+        expect(html).toMatch(/<code[^>]*data-streamdown="code"/);
     });
 
     it('hides copy & download when props set', async () => {
@@ -49,6 +51,8 @@ describe('CodeBlock feature matrix', () => {
         const count = html.match(/code-line-number/g)?.length || 0;
         expect(count).toBeGreaterThanOrEqual(2);
         expect(html).toContain('data-streamdown="code-line-number"');
+        expect(html).toMatch(/<pre[^>]*data-streamdown="pre"/);
+        expect(html).toMatch(/<code[^>]*data-streamdown="code"/);
     });
 
     it('respects selectable=false (adds select-none to pre)', async () => {

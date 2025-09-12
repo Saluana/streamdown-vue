@@ -217,6 +217,9 @@ Each semantic node receives a `data-streamdown="name"` attribute to make styling
 | Empty language placeholder | `code-lang-empty`   | Present when no language specified (reserved space)                    |
 | Copy button                | `copy-button`       | The actionable copy control                                            |
 | Code block body container  | `code-body`         | Wraps highlighted `<pre>`; horizontal scroll applied here              |
+| Code block <pre> element   | `pre`               | Added automatically to inner `<pre>` for targeting styles              |
+| Code block <code> element  | `code`              | Added automatically to inner `<code>`                                  |
+| Code line number span      | `code-line-number`  | Present when line numbers enabled                                      |
 | Unordered list `<ul>`      | `ul`                |                                                                        |
 | Ordered list `<ol>`        | `ol`                |                                                                        |
 | List item `<li>`           | `li`                |                                                                        |
