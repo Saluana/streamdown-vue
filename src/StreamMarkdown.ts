@@ -11,7 +11,11 @@ import MermaidBlock from './components/MermaidBlock';
 import defaultComponents, { type ComponentMap } from './components/components';
 import { parseBlocks } from '../lib/parse-blocks';
 import { parseIncompleteMarkdown } from '../lib/parse-incomplete-markdown';
-import { fixMatrix, normalizeDisplayMath } from '../lib/latex-utils';
+import {
+    fixMatrix,
+    normalizeBracketDisplayMath,
+    normalizeDisplayMath,
+} from '../lib/latex-utils';
 import {
     hardenHref,
     hardenSrc,
@@ -284,6 +288,7 @@ export const StreamMarkdown = defineComponent({
             // breaking streaming scenarios where the closing delimiter arrives later.
             // (debug logging removed)
             let preprocessed = fixMatrix(markdownSrc);
+            preprocessed = normalizeBracketDisplayMath(preprocessed);
             const afterFix = preprocessed;
             preprocessed = normalizeDisplayMath(preprocessed);
             // (debug logging removed)
@@ -339,7 +344,7 @@ export const StreamMarkdown = defineComponent({
                 .map((b) => b)
                 .map((b) =>
                     props.parseIncompleteMarkdown
-                        ? parseIncompleteMarkdown(b.trim())
+                        ? parseIncompleteMarkdown(b.trimEnd())
                         : b
                 );
             // (debug logging removed)

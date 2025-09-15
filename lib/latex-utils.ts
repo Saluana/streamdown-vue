@@ -123,3 +123,115 @@ export function normalizeDisplayMath(content: string): string {
         return '$$\n' + pretty.trim() + '\n$$';
     });
 }
+
+export function normalizeBracketDisplayMath(content: string): string {
+    const normalized = content.replace(/\r\n?/g, '\n');
+    const lines = normalized.split('\n');
+    const output: string[] = [];
+    let inFence = false;
+    let fenceMarker = '';
+    let fenceLength = 0;
+    let inMath = false;
+    let mathIndent = '';
+    let mathStripIndent = '';
+
+    const pushMathLine = (line: string) => {
+        output.push(line.length ? mathIndent + line : mathIndent);
+    };
+
+    const stripMathIndent = (line: string) => {
+        if (mathIndent && line.startsWith(mathIndent)) {
+            return line.slice(mathIndent.length);
+        }
+        if (mathStripIndent && line.startsWith(mathStripIndent)) {
+            return line.slice(mathStripIndent.length);
+        }
+        return line.trimStart();
+    };
+
+    for (const line of lines) {
+        if (!inMath) {
+            const fenceMatch = line.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
+            if (fenceMatch) {
+                const marker = fenceMatch[2] ?? '';
+                if (!inFence) {
+                    inFence = true;
+                    fenceMarker = marker[0] ?? '';
+                    fenceLength = marker.length;
+                } else if (
+                    marker[0] === fenceMarker &&
+                    marker.length >= fenceLength
+                ) {
+                    inFence = false;
+                    fenceMarker = '';
+                    fenceLength = 0;
+                }
+                output.push(line);
+                continue;
+            }
+        }
+
+        if (inFence) {
+            output.push(line);
+            continue;
+        }
+
+        if (!inMath) {
+            const startMatch = line.match(/^(\s*(?:>\s*)*)\\\[(.*)$/);
+            if (!startMatch) {
+                output.push(line);
+                continue;
+            }
+            inMath = true;
+            mathStripIndent = startMatch[1] ?? '';
+            mathIndent =
+                mathStripIndent.includes('>') && !/\s$/.test(mathStripIndent)
+                    ? mathStripIndent + ' '
+                    : mathStripIndent;
+            if (
+                output.length > 0 &&
+                output[output.length - 1]?.trim().length
+            ) {
+                output.push(
+                    mathIndent.includes('>') ? mathIndent : ''
+                );
+            }
+            output.push(mathIndent + '$$');
+            const remainder = startMatch[2] ?? '';
+            const closingIndex = remainder.indexOf('\\]');
+            if (closingIndex !== -1) {
+                const body = remainder.slice(0, closingIndex);
+                if (body.trim().length > 0 || body.length > 0) {
+                    pushMathLine(stripMathIndent(body).trimStart());
+                }
+                output.push(mathIndent + '$$');
+                inMath = false;
+                const trailing = remainder.slice(closingIndex + 2);
+                if (trailing.length > 0) {
+                    output.push(mathIndent + trailing.trimStart());
+                }
+            } else if (remainder.trim().length > 0) {
+                pushMathLine(stripMathIndent(remainder).trimStart());
+            }
+            continue;
+        }
+
+        const closingIndex = line.indexOf('\\]');
+        if (closingIndex !== -1) {
+            const before = line.slice(0, closingIndex);
+            if (before.trim().length > 0 || before.length > 0) {
+                pushMathLine(stripMathIndent(before));
+            }
+            output.push(mathIndent + '$$');
+            inMath = false;
+            const trailing = line.slice(closingIndex + 2);
+            if (trailing.length > 0) {
+                output.push(mathIndent + trailing.trimStart());
+            }
+        } else {
+            pushMathLine(stripMathIndent(line));
+        }
+    }
+
+    return output.join('\n');
+}
