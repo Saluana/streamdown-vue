@@ -283,20 +283,31 @@ export const StreamMarkdown = defineComponent({
                 }
             }
 
-            // Light LaTeX preprocessing: only fix matrix row breaks.
-            // We intentionally do NOT auto-escape stray $ anymore to avoid
-            // breaking streaming scenarios where the closing delimiter arrives later.
-            // (debug logging removed)
-            let preprocessed = fixMatrix(markdownSrc);
-            preprocessed = normalizeBracketDisplayMath(preprocessed);
-            const afterFix = preprocessed;
-            preprocessed = normalizeDisplayMath(preprocessed);
-            // (debug logging removed)
+            // Light LaTeX preprocessing helpers (matrix row breaks + bracket math normalization + display math normalization)
+            const applyLatexPreprocessing = (raw: string): string => {
+                let out = fixMatrix(raw);
+                out = normalizeBracketDisplayMath(out);
+                out = normalizeDisplayMath(out);
+                return out;
+            };
 
-            // If we have an open fence, we only parse the prefix markdown; the partial code is handled manually.
+            // Apply preprocessing to full doc
+            const preprocessedFull = applyLatexPreprocessing(markdownSrc);
+
+            // If we have an open fence, we still need to preprocess the prefix region so that
+            // bracket display math (\[ ... \]) and matrices continue to render. Previously the
+            // raw unprocessed prefix was used which caused already rendered KaTeX to "disappear"
+            // as soon as a progressive code fence opened.
+            if (openFenceInfo) {
+                openFenceInfo.prefix = applyLatexPreprocessing(
+                    openFenceInfo.prefix
+                );
+            }
+
+            // Choose correct slice to feed into markdown processor
             const toProcess = openFenceInfo
                 ? openFenceInfo.prefix
-                : preprocessed;
+                : preprocessedFull;
             const markdown = props.parseIncompleteMarkdown
                 ? parseIncompleteMarkdown(toProcess)
                 : toProcess;
