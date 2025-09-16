@@ -188,13 +188,8 @@ export function normalizeBracketDisplayMath(content: string): string {
                 mathStripIndent.includes('>') && !/\s$/.test(mathStripIndent)
                     ? mathStripIndent + ' '
                     : mathStripIndent;
-            if (
-                output.length > 0 &&
-                output[output.length - 1]?.trim().length
-            ) {
-                output.push(
-                    mathIndent.includes('>') ? mathIndent : ''
-                );
+            if (output.length > 0 && output[output.length - 1]?.trim().length) {
+                output.push(mathIndent.includes('>') ? mathIndent : '');
             }
             output.push(mathIndent + '$$');
             const remainder = startMatch[2] ?? '';
@@ -250,10 +245,7 @@ export function normalizeBracketDisplayMath(content: string): string {
                 inFence2 = true;
                 fenceChar2 = marker[0] ?? '';
                 fenceLen2 = marker.length;
-            } else if (
-                marker[0] === fenceChar2 &&
-                marker.length >= fenceLen2
-            ) {
+            } else if (marker[0] === fenceChar2 && marker.length >= fenceLen2) {
                 inFence2 = false;
                 fenceChar2 = '';
                 fenceLen2 = 0;
