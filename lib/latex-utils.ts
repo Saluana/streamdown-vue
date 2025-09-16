@@ -154,9 +154,19 @@ export function normalizeBracketDisplayMath(content: string): string {
             const fenceMatch = line.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
             if (fenceMatch) {
                 const marker = fenceMatch[2];
+                // If the regex unexpectedly didn't capture a marker, treat line as normal content.
+                if (!marker) {
+                    output.push(line);
+                    continue;
+                }
                 if (!inFence) {
+                    if (!marker.length) {
+                        // safety: empty string shouldn't happen, treat as normal line
+                        output.push(line);
+                        continue;
+                    }
                     inFence = true;
-                    fenceMarker = marker[0];
+                    fenceMarker = marker[0]!;
                     fenceLength = marker.length;
                 } else if (
                     marker[0] === fenceMarker &&
