@@ -232,6 +232,59 @@ export function normalizeBracketDisplayMath(content: string): string {
             pushMathLine(stripMathIndent(line));
         }
     }
-
-    return output.join('\n');
+    // Second pass: upgrade inline bracket math occurrences that appear mid-line
+    // e.g. "Intro text then \\[…\\] continues" -> separate display block.
+    // We intentionally skip lines inside code fences (tracked separately here).
+    const upgraded: string[] = [];
+    let inFence2 = false;
+    let fenceChar2 = '';
+    let fenceLen2 = 0;
+    for (const rawLine of output) {
+        // Guard against undefined when using noUncheckedIndexedAccess (though rawLine is always string in for..of)
+        const line: string = rawLine ?? '';
+        // Match fences possibly preceded by blockquote markers similar to first pass
+        const fenceMatch = line.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
+        if (fenceMatch) {
+            const marker = fenceMatch[2] ?? '';
+            if (!inFence2) {
+                inFence2 = true;
+                fenceChar2 = marker[0] ?? '';
+                fenceLen2 = marker.length;
+            } else if (
+                marker[0] === fenceChar2 &&
+                marker.length >= fenceLen2
+            ) {
+                inFence2 = false;
+                fenceChar2 = '';
+                fenceLen2 = 0;
+            }
+            upgraded.push(line);
+            continue;
+        }
+        if (inFence2) {
+            upgraded.push(line);
+            continue;
+        }
+        if (/\\\[.*?\\\]/.test(line) && !/^\s*\\\[/.test(line)) {
+            const pieces: string[] = [];
+            const inlineRegex = /\\\[([^\n]*?)\\\]/g;
+            let lastIndex = 0;
+            let m: RegExpExecArray | null;
+            while ((m = inlineRegex.exec(line))) {
+                const before = line.slice(lastIndex, m.index);
+                if (before.trim().length) pieces.push(before);
+                const inner = (m[1] ?? '').trim();
+                pieces.push('$$');
+                if (inner.length) pieces.push(inner);
+                pieces.push('$$');
+                lastIndex = m.index + m[0].length;
+            }
+            const after = line.slice(lastIndex);
+            if (after.trim().length) pieces.push(after);
+            for (const p of pieces) upgraded.push(p === '$$' ? '$$' : p);
+        } else {
+            upgraded.push(line);
+        }
+    }
+    return upgraded.join('\n');
 }
