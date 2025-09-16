@@ -153,10 +153,10 @@ export function normalizeBracketDisplayMath(content: string): string {
         if (!inMath) {
             const fenceMatch = line.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
             if (fenceMatch) {
-                const marker = fenceMatch[2] ?? '';
+                const marker = fenceMatch[2];
                 if (!inFence) {
                     inFence = true;
-                    fenceMarker = marker[0] ?? '';
+                    fenceMarker = marker[0];
                     fenceLength = marker.length;
                 } else if (
                     marker[0] === fenceMarker &&
@@ -201,7 +201,7 @@ export function normalizeBracketDisplayMath(content: string): string {
             const closingIndex = remainder.indexOf('\\]');
             if (closingIndex !== -1) {
                 const body = remainder.slice(0, closingIndex);
-                if (body.trim().length > 0 || body.length > 0) {
+                if (body.length > 0) {
                     pushMathLine(stripMathIndent(body).trimStart());
                 }
                 output.push(mathIndent + '$$');
@@ -219,7 +219,7 @@ export function normalizeBracketDisplayMath(content: string): string {
         const closingIndex = line.indexOf('\\]');
         if (closingIndex !== -1) {
             const before = line.slice(0, closingIndex);
-            if (before.trim().length > 0 || before.length > 0) {
+            if (before.length > 0) {
                 pushMathLine(stripMathIndent(before));
             }
             output.push(mathIndent + '$$');
@@ -240,8 +240,8 @@ export function normalizeBracketDisplayMath(content: string): string {
     let fenceChar2 = '';
     let fenceLen2 = 0;
     for (const rawLine of output) {
-        // Guard against undefined when using noUncheckedIndexedAccess (though rawLine is always string in for..of)
-        const line: string = rawLine ?? '';
+        // rawLine is always string in for..of
+        const line: string = rawLine;
         // Match fences possibly preceded by blockquote markers similar to first pass
         const fenceMatch = line.match(/^(\s*(?:>\s*)*)([`~]{3,})/);
         if (fenceMatch) {

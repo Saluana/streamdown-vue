@@ -354,6 +354,9 @@ export const StreamMarkdown = defineComponent({
             const blocks = merged
                 .map((b) => b)
                 .map((b) =>
+                    // Use trimEnd() instead of trim() to preserve leading whitespace,
+                    // which is important for markdown elements like code blocks and lists.
+                    // Only trailing whitespace is removed to avoid breaking indented content.
                     props.parseIncompleteMarkdown
                         ? parseIncompleteMarkdown(b.trimEnd())
                         : b
