@@ -11,7 +11,11 @@ import MermaidBlock from './components/MermaidBlock';
 import defaultComponents, { type ComponentMap } from './components/components';
 import { parseBlocks } from '../lib/parse-blocks';
 import { parseIncompleteMarkdown } from '../lib/parse-incomplete-markdown';
-import { fixMatrix, normalizeDisplayMath } from '../lib/latex-utils';
+import {
+    fixMatrix,
+    normalizeBracketDisplayMath,
+    normalizeDisplayMath,
+} from '../lib/latex-utils';
 import {
     hardenHref,
     hardenSrc,
@@ -279,19 +283,31 @@ export const StreamMarkdown = defineComponent({
                 }
             }
 
-            // Light LaTeX preprocessing: only fix matrix row breaks.
-            // We intentionally do NOT auto-escape stray $ anymore to avoid
-            // breaking streaming scenarios where the closing delimiter arrives later.
-            // (debug logging removed)
-            let preprocessed = fixMatrix(markdownSrc);
-            const afterFix = preprocessed;
-            preprocessed = normalizeDisplayMath(preprocessed);
-            // (debug logging removed)
+            // Light LaTeX preprocessing helpers (matrix row breaks + bracket math normalization + display math normalization)
+            const applyLatexPreprocessing = (raw: string): string => {
+                let out = fixMatrix(raw);
+                out = normalizeBracketDisplayMath(out);
+                out = normalizeDisplayMath(out);
+                return out;
+            };
 
-            // If we have an open fence, we only parse the prefix markdown; the partial code is handled manually.
+            // Apply preprocessing to full doc
+            const preprocessedFull = applyLatexPreprocessing(markdownSrc);
+
+            // If we have an open fence, we still need to preprocess the prefix region so that
+            // bracket display math (\[ ... \]) and matrices continue to render. Previously the
+            // raw unprocessed prefix was used which caused already rendered KaTeX to "disappear"
+            // as soon as a progressive code fence opened.
+            if (openFenceInfo) {
+                openFenceInfo.prefix = applyLatexPreprocessing(
+                    openFenceInfo.prefix
+                );
+            }
+
+            // Choose correct slice to feed into markdown processor
             const toProcess = openFenceInfo
                 ? openFenceInfo.prefix
-                : preprocessed;
+                : preprocessedFull;
             const markdown = props.parseIncompleteMarkdown
                 ? parseIncompleteMarkdown(toProcess)
                 : toProcess;
@@ -338,8 +354,11 @@ export const StreamMarkdown = defineComponent({
             const blocks = merged
                 .map((b) => b)
                 .map((b) =>
+                    // Use trimEnd() instead of trim() to preserve leading whitespace,
+                    // which is important for markdown elements like code blocks and lists.
+                    // Only trailing whitespace is removed to avoid breaking indented content.
                     props.parseIncompleteMarkdown
-                        ? parseIncompleteMarkdown(b.trim())
+                        ? parseIncompleteMarkdown(b.trimEnd())
                         : b
                 );
             // (debug logging removed)
