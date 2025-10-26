@@ -8,6 +8,7 @@ import {
     getCurrentInstance,
     nextTick,
 } from 'vue';
+import type { PropType } from 'vue';
 import CopyButton from './CopyButton';
 import DownloadButton from './DownloadButton';
 import { useShikiHighlighter } from '../use-shiki-highlighter';
@@ -31,6 +32,10 @@ export default defineComponent({
         // Hide built-in copy or download buttons if user wants total control.
         hideCopy: { type: Boolean, default: false },
         hideDownload: { type: Boolean, default: false },
+        shikiDisclude: {
+            type: Array as PropType<string[]>,
+            default: undefined,
+        },
     },
     setup(props, { attrs, slots }) {
         const html = ref('');
@@ -140,7 +145,9 @@ export default defineComponent({
         const doHighlight = async () => {
             const currentToken = ++renderToken;
             try {
-                const highlighter = await useShikiHighlighter();
+                const highlighter = await useShikiHighlighter({
+                    disclude: props.shikiDisclude,
+                });
                 const theme =
                     props.theme ||
                     (media?.matches ? 'github-dark' : 'github-light');

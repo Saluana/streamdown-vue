@@ -173,6 +173,7 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 | `allowedLinkPrefixes`      | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
 | `parseIncompleteMarkdown`  | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
 | `shikiTheme`               | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                                                                                       |
+| `shikiDisclude`            | `string[]`                 | `[]`                     | Array of Shiki language ids (aliases auto-resolved, e.g., `py -> python`) to skip from the eagerly preloaded core set (helps keep consumer bundles smaller when you only need a subset). |
 | `codeBlockActions`         | `Component[]`              | `[]`                     | Array of Vue components appended as action buttons in every code block header.                                                                                                  |
 | `codeBlockShowLineNumbers` | `boolean`                  | `false`                  | Show line numbers in all code fences.                                                                                                                                           |
 | `codeBlockSelectable`      | `boolean`                  | `true`                   | Whether code text is selectable (adds `select-none` when false).                                                                                                                |
@@ -365,7 +366,17 @@ Any valid Shiki theme name you have available can be passed. If you need multipl
 />
 ```
 
-> Note: The highlighter preloads a small set of common languages (ts, js, json, bash, python, diff, markdown, vue). Additional languages will be auto‑loaded by Shiki if requested.
+> Note: The highlighter preloads a small set of common languages (ts, js, json, bash, python, diff, markdown, vue). Pass `:shiki-disclude="['rust','py']"` (or any subset) to skip loading specific entries up front and keep bundles smaller. Additional languages will still be auto‑loaded by Shiki if requested at runtime.
+
+```vue
+<StreamMarkdown
+    :content="md"
+    :shiki-disclude="['rust', 'go', 'py']"
+/>
+```
+
+Use the canonical Shiki language ids (the same keys exposed by `shiki/bundled-languages`), and include aliases such as `'py'` if you also want to drop them.
+Aliases automatically map to their canonical counterparts, so excluding `'py'` also removes the full Python grammar from the preloaded bundle.
 
 ### 9.2 Built‑in CodeBlock Features
 

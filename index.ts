@@ -10,4 +10,8 @@ export {
 } from './src/components/codeblock-context';
 export { parseBlocks } from './lib/parse-blocks';
 export { parseIncompleteMarkdown } from './lib/parse-incomplete-markdown';
-export { useShikiHighlighter } from './src/use-shiki-highlighter';
+export {
+    useShikiHighlighter,
+    setDefaultShikiDisclude,
+    type UseShikiHighlighterOptions,
+} from './src/use-shiki-highlighter';
