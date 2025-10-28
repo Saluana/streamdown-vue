@@ -44,7 +44,6 @@ export const StreamMarkdown = defineComponent({
         },
         parseIncompleteMarkdown: { type: Boolean, default: true },
         shikiTheme: { type: String, default: 'github-light' },
-        shikiDisclude: { type: Array as () => string[], default: () => [] },
         // --- CodeBlock pass-through customization ---
         codeBlockActions: { type: Array as () => any[], default: () => [] },
         codeBlockShowLineNumbers: { type: Boolean, default: false },
@@ -202,7 +201,6 @@ export const StreamMarkdown = defineComponent({
                     code,
                     language: lang,
                     theme: props.shikiTheme,
-                    shikiDisclude: props.shikiDisclude,
                     actions: props.codeBlockActions,
                     showLineNumbers: props.codeBlockShowLineNumbers,
                     selectable: props.codeBlockSelectable,
@@ -378,7 +376,6 @@ export const StreamMarkdown = defineComponent({
                         code: openFenceInfo.code,
                         language: openFenceInfo.lang,
                         theme: props.shikiTheme,
-                        shikiDisclude: props.shikiDisclude,
                         actions: props.codeBlockActions,
                         showLineNumbers: props.codeBlockShowLineNumbers,
                         selectable: props.codeBlockSelectable,

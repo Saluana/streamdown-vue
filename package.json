@@ -1,6 +1,6 @@
 {
     "name": "streamdown-vue",
-    "version": "1.0.21",
+    "version": "1.0.25",
     "description": "Streamdown-style streaming Markdown renderer for Vue 3/Nuxt 3 with Shiki, KaTeX, Mermaid, and secure streaming helpers.",
     "type": "module",
     "main": "dist/index.cjs.js",
@@ -11,6 +11,11 @@
             "types": "./dist/index.d.ts",
             "import": "./dist/index.es.js",
             "require": "./dist/index.cjs.js"
+        },
+        "./core": {
+            "types": "./dist/core.d.ts",
+            "import": "./dist/core.es.js",
+            "require": "./dist/core.cjs.js"
         }
     },
     "scripts": {
@@ -48,8 +53,14 @@
     },
     "license": "Apache-2.0",
     "author": "@Saluana",
-    "sideEffects": false,
+    "sideEffects": [
+        "./dist/index.es.js",
+        "./dist/index.cjs.js"
+    ],
     "dependencies": {
+        "@shikijs/engine-javascript": "^3.12.1",
+        "@shikijs/langs": "^3.12.1",
+        "@shikijs/themes": "^3.12.1",
         "hast-util-to-text": "^4.0.2",
         "katex": "^0.16.22",
         "lucide-vue-next": "^0.542.0",
@@ -61,7 +72,8 @@
         "remark-parse": "^11.0.0",
         "remark-rehype": "^11.1.2",
         "shiki": "^3.12.1",
-        "unified": "^11.0.5"
+        "unified": "^11.0.5",
+        "vite-bundle-visualizer": "^1.2.1"
     },
     "peerDependencies": {
         "vue": "^3.5.21",

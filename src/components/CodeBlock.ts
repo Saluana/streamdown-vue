@@ -5,13 +5,14 @@ import {
     onBeforeUnmount,
     ref,
     watch,
-    getCurrentInstance,
     nextTick,
 } from 'vue';
-import type { PropType } from 'vue';
 import CopyButton from './CopyButton';
 import DownloadButton from './DownloadButton';
-import { useShikiHighlighter } from '../use-shiki-highlighter';
+import {
+    useShikiHighlighter,
+    loadRegisteredShikiLanguage,
+} from '../use-shiki-highlighter';
 import {
     CODE_BLOCK_META_KEY,
     GLOBAL_CODE_BLOCK_ACTIONS,
@@ -32,10 +33,6 @@ export default defineComponent({
         // Hide built-in copy or download buttons if user wants total control.
         hideCopy: { type: Boolean, default: false },
         hideDownload: { type: Boolean, default: false },
-        shikiDisclude: {
-            type: Array as PropType<string[]>,
-            default: undefined,
-        },
     },
     setup(props, { attrs, slots }) {
         const html = ref('');
@@ -145,9 +142,7 @@ export default defineComponent({
         const doHighlight = async () => {
             const currentToken = ++renderToken;
             try {
-                const highlighter = await useShikiHighlighter({
-                    disclude: props.shikiDisclude,
-                });
+                const highlighter = await useShikiHighlighter();
                 const theme =
                     props.theme ||
                     (media?.matches ? 'github-dark' : 'github-light');
@@ -157,10 +152,13 @@ export default defineComponent({
                     out = highlighter.codeToHtml(props.code, { lang, theme });
                 } catch (e) {
                     try {
-                        if (!highlighter.getLoadedLanguages().includes(lang)) {
-                            // attempt dynamic load
-                            // @ts-ignore
-                            await highlighter.loadLanguage(lang);
+                        if (
+                            lang &&
+                            !highlighter.getLoadedLanguages().includes(lang)
+                        ) {
+                            const loaded =
+                                await loadRegisteredShikiLanguage(lang);
+                            if (!loaded) throw new Error('missing lang');
                         }
                         out = highlighter.codeToHtml(props.code, {
                             lang,

@@ -7,6 +7,6 @@
     "noEmit": false,
     "outDir": "dist"
   },
-  "include": ["index.ts", "src/**/*", "lib/**/*"],
+  "include": ["index.ts", "core.ts", "src/**/*", "lib/**/*"],
   "exclude": ["**/__tests__/**", "tests/**"]
 }

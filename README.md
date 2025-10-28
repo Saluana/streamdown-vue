@@ -173,7 +173,6 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 | `allowedLinkPrefixes`      | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
 | `parseIncompleteMarkdown`  | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
 | `shikiTheme`               | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                                                                                       |
-| `shikiDisclude`            | `string[]`                 | `[]`                     | Array of Shiki language ids (aliases auto-resolved, e.g., `py -> python`) to skip from the eagerly preloaded core set (helps keep consumer bundles smaller when you only need a subset). |
 | `codeBlockActions`         | `Component[]`              | `[]`                     | Array of Vue components appended as action buttons in every code block header.                                                                                                  |
 | `codeBlockShowLineNumbers` | `boolean`                  | `false`                  | Show line numbers in all code fences.                                                                                                                                           |
 | `codeBlockSelectable`      | `boolean`                  | `true`                   | Whether code text is selectable (adds `select-none` when false).                                                                                                                |
@@ -349,6 +348,8 @@ const MyCode = defineComponent({
 <StreamMarkdown :components="{ codeblock: MyCode }" />
 ```
 
+> **Need a deeper walkthrough?** The [Shiki Language Bundling Guide](./docs/shiki-language-guide.md) covers both the batteries-included entry and the minimal core workflow.
+
 ### 9.1 Changing the Shiki Theme
 
 You can switch the built‑in highlighting theme via the `shikiTheme` prop (default: `github-light`):
@@ -366,19 +367,68 @@ Any valid Shiki theme name you have available can be passed. If you need multipl
 />
 ```
 
-> Note: The highlighter preloads a small set of common languages (ts, js, json, bash, python, diff, markdown, vue). Pass `:shiki-disclude="['rust','py']"` (or any subset) to skip loading specific entries up front and keep bundles smaller. Additional languages will still be auto‑loaded by Shiki if requested at runtime.
+> Note: The default build registers a compact set of common languages (TS/JS/JSON/Bash/Python/Diff/Markdown/Vue/HTML/CSS/Go/Rust/YAML). Add or remove grammars by calling `registerShikiLanguage(s)` before your first render (details below).
 
-```vue
-<StreamMarkdown
-    :content="md"
-    :shiki-disclude="['rust', 'go', 'py']"
-/>
+### 9.2 Controlling the Shiki bundle
+
+- **`registerDefaultShikiLanguages()`** – invoked automatically when you import from `streamdown-vue`; registers the curated language set.
+- **`registerShikiLanguage(s)`** – call this in your own entry point to add or override grammars (local files or CDN-based loaders).
+- **`excludeShikiLanguages([...])`** – remove specific loaders after the defaults register (e.g. drop Rust if you never show it).
+- **`clearRegisteredShikiLanguages()`** – wipe the registry entirely before registering your own minimal set (used internally by the core entry).
+- **`streamdown-vue/core` entry** – ships without defaults so only the grammars you register are ever referenced (perfect for bundle-sensitive apps).
+
+Registering only the languages you need (core build):
+
+```ts
+import {
+    StreamMarkdown,
+    registerShikiLanguages,
+} from 'streamdown-vue/core';
+
+registerShikiLanguages([
+    { id: 'typescript', loader: () => import('@shikijs/langs/typescript') },
+    { id: 'json', loader: () => import('@shikijs/langs/json') },
+    { id: 'bash', loader: () => import('@shikijs/langs/bash') },
+]);
 ```
 
-Use the canonical Shiki language ids (the same keys exposed by `shiki/bundled-languages`), and include aliases such as `'py'` if you also want to drop them.
-Aliases automatically map to their canonical counterparts, so excluding `'py'` also removes the full Python grammar from the preloaded bundle.
+The default (non-core) entry automatically registers the curated set listed below. If you only ever highlight a smaller subset, switch to the core entry, register those languages, and your bundler will never even see the unused grammars.
 
-### 9.2 Built‑in CodeBlock Features
+### 9.3 Preloaded Shiki Languages
+
+The built-in highlighter eagerly loads the grammars you register. The default bundle calls `registerDefaultShikiLanguages()` which wires up the following set:
+
+| Canonical ID | Aliases        | Human-readable language |
+| ------------ | -------------- | ----------------------- |
+| `typescript` | `ts`           | TypeScript              |
+| `tsx`        | —              | TypeScript JSX          |
+| `javascript` | `js`           | JavaScript              |
+| `jsx`        | —              | JavaScript JSX          |
+| `json`       | —              | JSON                    |
+| `bash`       | —              | Bash / shell script     |
+| `shell`      | `shellscript`, `sh`, `zsh` | Generic shell script    |
+| `python`     | `py`           | Python                  |
+| `diff`       | —              | Unified diff            |
+| `markdown`   | `md`           | Markdown                |
+| `vue`        | `markdown-vue` | Vue SFC                 |
+| `html`       | `html-derivative` | HTML / derivatives  |
+| `css`        | —              | CSS                     |
+| `go`         | —              | Go                      |
+| `rust`       | —              | Rust                    |
+| `yaml`       | `yml`          | YAML                    |
+| `cpp`        | `c++`          | C++ *(CDN)* |
+| `java`       | —              | Java *(CDN)* |
+| `c`          | —              | C *(CDN)* |
+| `csharp`     | `cs`, `c#`     | C# *(CDN)* |
+| `php`        | —              | PHP *(CDN)* |
+| `ruby`       | —              | Ruby *(CDN)* |
+| `kotlin`     | —              | Kotlin *(CDN)* |
+| `swift`      | —              | Swift *(CDN)* |
+| `sql`        | —              | SQL *(CDN)* |
+
+If you rarely show, for instance, Rust or Go snippets, simply omit them when calling `registerShikiLanguages`. Fences that reference an unregistered language fall back to plain `<pre><code>` (with a development warning) instead of pulling in extra grammars.
+
+### 9.4 Built‑in CodeBlock Features
 
 `CodeBlock` now provides:
 

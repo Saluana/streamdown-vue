@@ -1,124 +1,80 @@
 import {
-    createHighlighter,
-    type Highlighter,
-    bundledLanguagesInfo,
-} from 'shiki';
+    createHighlighterCore,
+    type HighlighterCore,
+    type LanguageInput,
+    type ThemeInput,
+} from 'shiki/core';
+import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
+import githubLight from '@shikijs/themes/github-light';
+import githubDark from '@shikijs/themes/github-dark';
+import {
+    getRegisteredLanguageIds,
+    hasRegisteredLanguages,
+    resolveLanguageInputs,
+} from './shiki/registry';
+import { isRemoteLanguageLoader } from './shiki/cdn';
 
-// Core language set we eagerly load so that most common fences highlight without
-// per-language network round trips in consuming apps (especially SSR hydration).
-const CORE_LANGS = [
-    'ts',
-    'tsx',
-    'js',
-    'jsx',
-    'json',
-    'bash',
-    'sh',
-    'shell',
-    'python',
-    'py',
-    'diff',
-    'markdown',
-    'md',
-    'vue',
-    'html',
-    'css',
-    'go',
-    'rust',
-];
+let highlighter: HighlighterCore | null = null;
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
-export type UseShikiHighlighterOptions = {
-    disclude?: string[];
+const themes: ThemeInput[] = [githubLight, githubDark];
+
+let regexEngine: ReturnType<typeof createJavaScriptRegexEngine> | null = null;
+const ensureEngine = () => {
+    if (!regexEngine) {
+        regexEngine = createJavaScriptRegexEngine();
+    }
+    return regexEngine;
 };
 
-let preferredDisclude: string[] = [];
-let highlighter: Highlighter | null = null;
-let highlighterPromise: Promise<Highlighter> | null = null;
-let configuredKey: string | null = null;
-let warnedAboutConfigMismatch = false;
+const prepareLanguageInputs = (): LanguageInput[] => {
+    if (!hasRegisteredLanguages()) {
+        console.warn(
+            '[streamdown-vue] No Shiki languages are registered. Code blocks will render without syntax highlighting.'
+        );
+        return [];
+    }
 
-const normalizeLang = (lang: string): string =>
-    lang.trim().toLowerCase().replace(/^language-/, '');
+    const ids = getRegisteredLanguageIds();
+    const { inputs, missing } = resolveLanguageInputs(ids);
 
-type AliasMap = Map<string, string>;
-let aliasMap: AliasMap | null = null;
+    if (missing.length) {
+        console.warn(
+            `[streamdown-vue] Some requested Shiki languages are not registered: ${missing.join(
+                ', '
+            )}`
+        );
+    }
 
-const getAliasMap = (): AliasMap => {
-    if (aliasMap) return aliasMap;
-    aliasMap = new Map();
-    bundledLanguagesInfo.forEach((info: any) => {
-        const canonical = normalizeLang(info.id || '');
-        if (!canonical) return;
-        aliasMap!.set(canonical, canonical);
-        const aliases = info.aliases || [];
-        aliases.forEach((alias: string) => {
-            const key = normalizeLang(alias);
-            if (key) {
-                aliasMap!.set(key, canonical);
-            }
-        });
-    });
-    return aliasMap;
+    return inputs.filter((input) => !isRemoteLanguageLoader(input));
 };
-
-const canonicalize = (lang: string): string => {
-    const key = normalizeLang(lang);
-    if (!key) return key;
-    return getAliasMap().get(key) ?? key;
-};
-
-const normalizeList = (langs: string[] = []): string[] => {
-    return Array.from(
-        new Set(langs.map(canonicalize).filter(Boolean))
-    ).sort();
-};
-
-const computeLangs = (disclude: string[]): string[] => {
-    if (!disclude.length) return [...CORE_LANGS];
-    const blocklist = new Set(disclude);
-    return CORE_LANGS.filter((lang) => {
-        const canonical = canonicalize(lang);
-        return !blocklist.has(canonical);
-    });
-};
-
-export function setDefaultShikiDisclude(langs: string[] = []): void {
-    preferredDisclude = normalizeList(langs);
-}
 
 export function __resetHighlighterForTests(): void {
-    preferredDisclude = [];
     highlighter = null;
     highlighterPromise = null;
-    configuredKey = null;
-    warnedAboutConfigMismatch = false;
 }
 
-export async function useShikiHighlighter(
-    options: UseShikiHighlighterOptions = {}
-): Promise<Highlighter> {
-    const normalized = normalizeList(
-        options.disclude ?? preferredDisclude ?? []
-    );
-    const key = normalized.join(',');
+export async function loadRegisteredShikiLanguage(
+    lang: string
+): Promise<boolean> {
+    if (!highlighter) return false;
+    const { inputs } = resolveLanguageInputs([lang]);
+    if (!inputs.length) return false;
+    await highlighter.loadLanguage(...inputs);
+    return true;
+}
+
+export async function useShikiHighlighter(): Promise<HighlighterCore> {
     if (!highlighterPromise) {
-        configuredKey = key;
-        highlighterPromise = createHighlighter({
-            themes: ['github-light', 'github-dark'],
-            langs: computeLangs(normalized),
+        const langs = prepareLanguageInputs();
+        highlighterPromise = createHighlighterCore({
+            themes,
+            langs,
+            engine: ensureEngine(),
         }).then((instance) => {
             highlighter = instance;
             return instance;
         });
-    } else if (
-        configuredKey !== key &&
-        normalized.length &&
-        !warnedAboutConfigMismatch
-    ) {
-        console.warn(
-            '[streamdown-vue] shikiDisclude changed after the highlighter initialized. Reload to apply new exclusions.'
-        );
-        warnedAboutConfigMismatch = true;
     }
     return await highlighterPromise;
 }

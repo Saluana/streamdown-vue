@@ -1,6 +1,17 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue';
-import { StreamMarkdown } from '../../src/StreamMarkdown';
+import {
+    StreamMarkdown,
+    registerShikiLanguage,
+    excludeShikiLanguages,
+} from '../../index';
+
+// Example: opt into an extra grammar (C++) beyond the defaults.
+/*
+registerShikiLanguage({
+    id: 'cpp',
+    loader: () => import('@shikijs/langs/cpp'),
+});*/
 
 // Live markdown input (also target of streaming)
 const input = ref('');
@@ -13,6 +24,7 @@ let timer: number | null = null;
 // Base demo chunk sequence (could come from a real server stream).
 // We'll clone / extend this for stress testing.
 const baseChunks: string[] = [
+    '### 1. Python\n```python\nprint("Hello, World!")\n```\n\nRun it:\n```bash\npython hello.py\n```\n\n---\n\n### 2. JavaScript\n```javascript\nconsole.log("Hello, World!");\n```\n\nRun it:\n```bash\nnode hello.js\n```\n\n---\n\n### 3. TypeScript\n```typescript\nconsole.log("Hello, World!");\n```\n\nCompile and run:\n```bash\ntsc hello.ts && node hello.js\n```\n\n---\n\n### 4. C\n```c\n#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}\n```\n\nCompile and run:\n```bash\ngcc hello.c -o hello && ./hello\n```\n\n---\n\n### 5. C++\n```cpp\n#include <iostream>\nusing namespace std;\n\nint main() {\n    cout << "Hello, World!" << endl;\n    return 0;\n}\n```\n\nCompile and run:\n```bash\ng++ hello.cpp -o hello && ./hello\n```\n\n---\n\n### 6. Java\n```java\npublic class Hello {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}\n```\n\nCompile and run:\n```bash\njavac Hello.java && java Hello\n```\n\n---\n\n### 7. Go\n```go\npackage main\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, World!")\n}\n```\n\nRun it:\n```bash\ngo run hello.go\n```\n\n---\n\n### 8. Rust\n```rust\nfn main() {\n    println!("Hello, World!");\n}\n```\n\nRun it:\n```bash\nrustc hello.rs && ./hello\n```\n\n---\n\n### 9. Ruby\n```ruby\nputs "Hello, World!"\n```\n\nRun it:\n```bash\nruby hello.rb\n```\n\n---\n\n### 10. Bash\n```bash\necho "Hello, World!"\n```\n\nRun it directly:\n```bash\nbash hello.sh\n``` \n\n',
     `好的！KaTeX 是一个非常流行的数学公式渲染引擎。下面是一些常见的数学公式示例，使用 KaTeX 语法：
 
 ### 基本公式

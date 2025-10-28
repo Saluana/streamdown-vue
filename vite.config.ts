@@ -6,7 +6,7 @@ export default defineConfig({
     plugins: [
         vue(),
         dts({
-            include: ['index.ts', 'src', 'lib'],
+            include: ['index.ts', 'core.ts', 'src', 'lib'],
             outDir: 'dist',
             insertTypesEntry: true,
             // Roll up all d.ts into a single entry (reduces published size)
@@ -18,11 +18,16 @@ export default defineConfig({
     },
     build: {
         lib: {
-            entry: 'index.ts',
+            entry: {
+                index: 'index.ts',
+                core: 'core.ts',
+            },
             name: 'StreamdownVue',
             formats: ['es', 'cjs'],
-            fileName: (format: string) =>
-                format === 'es' ? 'index.es.js' : 'index.cjs.js',
+            fileName: (format: string, entryName: string) =>
+                format === 'es'
+                    ? `${entryName}.es.js`
+                    : `${entryName}.cjs.js`,
         },
         rollupOptions: {
             external: [
@@ -30,6 +35,9 @@ export default defineConfig({
                 'mermaid',
                 'katex',
                 'shiki',
+                /^shiki\//,
+                /^@shikijs\/themes\//,
+                /^@shikijs\/langs\//,
                 'marked',
                 'remark-parse',
                 'remark-gfm',
