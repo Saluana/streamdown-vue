@@ -1,4 +1,5 @@
 import { defineComponent, h } from 'vue';
+import type { PropType } from 'vue';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
@@ -21,6 +22,7 @@ import {
     hardenSrc,
     type HardenOptions,
 } from './security/harden-vue-markdown';
+import type { ShikiThemeConfig } from './types';
 // (Removed direct KaTeX CSS import to avoid bundling large base64 fonts.)
 // Consumers must import 'katex/dist/katex.min.css' themselves (as documented in README).
 
@@ -43,7 +45,10 @@ export const StreamMarkdown = defineComponent({
             default: () => ['https://', 'http://'],
         },
         parseIncompleteMarkdown: { type: Boolean, default: true },
-        shikiTheme: { type: String, default: 'github-light' },
+        shikiTheme: {
+            type: [String, Object] as PropType<ShikiThemeConfig>,
+            default: undefined,
+        },
         // --- CodeBlock pass-through customization ---
         codeBlockActions: { type: Array as () => any[], default: () => [] },
         codeBlockShowLineNumbers: { type: Boolean, default: false },

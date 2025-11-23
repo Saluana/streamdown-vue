@@ -7,12 +7,14 @@ import {
     watch,
     nextTick,
 } from 'vue';
+import type { PropType } from 'vue';
 import CopyButton from './CopyButton';
 import DownloadButton from './DownloadButton';
 import {
     useShikiHighlighter,
     loadRegisteredShikiLanguage,
 } from '../use-shiki-highlighter';
+import type { ShikiThemeConfig } from '../types';
 import {
     CODE_BLOCK_META_KEY,
     GLOBAL_CODE_BLOCK_ACTIONS,
@@ -25,7 +27,10 @@ export default defineComponent({
     props: {
         code: { type: String, required: true },
         language: { type: String, default: '' },
-        theme: { type: String, default: 'github-light' },
+        theme: {
+            type: [String, Object] as PropType<ShikiThemeConfig>,
+            default: undefined,
+        },
         showLineNumbers: { type: Boolean, default: false },
         selectable: { type: Boolean, default: true },
         // Array of extra action components (or render functions) appended to header right side.
@@ -139,35 +144,90 @@ export default defineComponent({
             return withCode;
         };
 
+        const injectDualThemeStyles = () => {
+            if (typeof document !== 'undefined') {
+                const styleId = 'streamdown-dual-theme-styles';
+                if (!document.getElementById(styleId)) {
+                    const style = document.createElement('style');
+                    style.id = styleId;
+                    style.textContent = `
+                        html.dark .shiki-themes, html.dark .shiki-themes span {
+                            color: var(--shiki-dark) !important;
+                            font-style: var(--shiki-dark-font-style) !important;
+                            font-weight: var(--shiki-dark-font-weight) !important;
+                            text-decoration: var(--shiki-dark-text-decoration) !important;
+                        }
+                        @media (prefers-color-scheme: dark) {
+                            html:not(.light) .shiki-themes,
+                            html:not(.light) .shiki-themes span {
+                                color: var(--shiki-dark) !important;
+                                font-style: var(--shiki-dark-font-style) !important;
+                                font-weight: var(--shiki-dark-font-weight) !important;
+                                text-decoration: var(--shiki-dark-text-decoration) !important;
+                            }
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
+            }
+        };
+
+        const generateHtml = (
+            code: string,
+            lang: string,
+            theme: ShikiThemeConfig | undefined,
+            highlighter: any
+        ) => {
+            const isDual = typeof theme === 'object' && theme !== null;
+            if (isDual) {
+                return highlighter.codeToHtml(code, {
+                    lang,
+                    themes: { light: theme.light, dark: theme.dark },
+                });
+            }
+            // Fallback to system preference if theme is undefined
+            const singleTheme =
+                (theme as string) ||
+                (media?.matches ? 'github-dark' : 'github-light');
+            return highlighter.codeToHtml(code, {
+                lang,
+                theme: singleTheme,
+            });
+        };
+
         const doHighlight = async () => {
             const currentToken = ++renderToken;
             try {
                 const highlighter = await useShikiHighlighter();
-                const theme =
-                    props.theme ||
-                    (media?.matches ? 'github-dark' : 'github-light');
                 const lang = props.language || 'txt';
                 let out = '';
+
                 try {
-                    out = highlighter.codeToHtml(props.code, { lang, theme });
+                    out = generateHtml(
+                        props.code,
+                        lang,
+                        props.theme,
+                        highlighter
+                    );
                 } catch (e) {
-                    try {
-                        if (
-                            lang &&
-                            !highlighter.getLoadedLanguages().includes(lang)
-                        ) {
-                            const loaded =
-                                await loadRegisteredShikiLanguage(lang);
-                            if (!loaded) throw new Error('missing lang');
-                        }
-                        out = highlighter.codeToHtml(props.code, {
+                    // Retry with loaded language
+                    if (
+                        lang &&
+                        !highlighter.getLoadedLanguages().includes(lang)
+                    ) {
+                        const loaded = await loadRegisteredShikiLanguage(lang);
+                        if (!loaded) throw new Error('missing lang');
+                        out = generateHtml(
+                            props.code,
                             lang,
-                            theme,
-                        });
-                    } catch {
-                        out = `<pre><code>${props.code}</code></pre>`;
+                            props.theme,
+                            highlighter
+                        );
+                    } else {
+                        throw e;
                     }
                 }
+
                 // Only commit if this is the latest async render
                 if (currentToken === renderToken) {
                     html.value = processOutput(out);
@@ -182,10 +242,23 @@ export default defineComponent({
         };
 
         onMounted(() => {
-            media = window.matchMedia('(prefers-color-scheme: dark)');
+            const isDualTheme =
+                typeof props.theme === 'object' && props.theme !== null;
+
+            // Inject generic dual-theme CSS if needed.
+            if (isDualTheme) {
+                injectDualThemeStyles();
+            }
+
             render = doHighlight;
             render();
-            media.addEventListener('change', render);
+
+            // Only setup media query listener for single theme mode
+            // Dual themes handle switching via CSS variables automatically
+            if (!isDualTheme) {
+                media = window.matchMedia('(prefers-color-scheme: dark)');
+                media.addEventListener('change', render);
+            }
         });
 
         // Re-highlight when code / language / theme changes (progressive streaming updates)

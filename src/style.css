@@ -151,12 +151,6 @@
     font-size: 0.9em;
 }
 
-@media (prefers-color-scheme: dark) {
-    .streamdown-vue code {
-        color: white !important;
-    }
-}
-
 .streamdown-vue pre {
     padding: 1rem;
     border-radius: var(--sd-border-radius);
@@ -201,7 +195,13 @@
     font-family: var(--sd-font-family-code-header);
     font-size: 0.875rem;
     color: var(--sd-on-surface);
-    opacity: 0.9;
+    opacity: 1;
+}
+
+.streamdown-vue [data-streamdown='code-actions'] {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .streamdown-vue [data-streamdown='code-lang'] {
@@ -209,7 +209,7 @@
     color: var(--sd-on-surface);
     letter-spacing: 0.5px;
     font-size: 10px !important;
-    opacity: 0.7;
+    opacity: 0.9;
 }
 
 .streamdown-vue [data-streamdown='code'] {
@@ -241,9 +241,9 @@
     transition: all 0.2s;
     display: inline-flex;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     line-height: 1;
-    opacity: 0.6;
+    opacity: 0.85;
 }
 
 .streamdown-vue [data-streamdown='copy-button'] svg,
@@ -324,7 +324,8 @@
     margin-top: 32px !important;
     margin-bottom: 32px;
     overflow-x: auto;
-    width: 100%;
+    width: fit-content;
+    max-width: 100%;
     display: block;
 }
 

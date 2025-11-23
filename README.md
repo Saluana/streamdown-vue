@@ -278,7 +278,7 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 | `allowedImagePrefixes`     | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                                                                                        |
 | `allowedLinkPrefixes`      | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
 | `parseIncompleteMarkdown`  | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
-| `shikiTheme`               | `string`                   | `'github-light'`         | Shiki theme to use for syntax highlighting (any loaded Shiki theme name).                                                                                                       |
+| `shikiTheme`               | `ShikiThemeConfig`         | `undefined`              | Shiki theme (string) or dual theme object `{ light: '...', dark: '...' }`. If undefined, follows system preference (`github-light`/`github-dark`).                            |
 | `codeBlockActions`         | `Component[]`              | `[]`                     | Array of Vue components appended as action buttons in every code block header.                                                                                                  |
 | `codeBlockShowLineNumbers` | `boolean`                  | `false`                  | Show line numbers in all code fences.                                                                                                                                           |
 | `codeBlockSelectable`      | `boolean`                  | `true`                   | Whether code text is selectable (adds `select-none` when false).                                                                                                                |
@@ -345,7 +345,7 @@ Each semantic node receives a `data-streamdown="name"` attribute to make styling
 | Mermaid wrapper            | `mermaid`           | Replaced with rendered SVG / diagram                                   |
 | KaTeX output               | `katex`             | Class emitted by KaTeX (not set by us but styled via global KaTeX CSS) |
 
-### 7.1 Styling via Data Attributes
+### 8.1 Styling via Data Attributes
 
 Because every semantic node has a stable `data-streamdown` marker, you can author zero‑collision styles (or component library themes) without relying on brittle tag chains. Example – customize the code block body and header:
 
@@ -456,26 +456,62 @@ const MyCode = defineComponent({
 
 > **Need a deeper walkthrough?** The [Shiki Language Bundling Guide](./docs/shiki-language-guide.md) covers both the batteries-included entry and the minimal core workflow.
 
-### 9.1 Changing the Shiki Theme
+### 10.1 Changing the Shiki Theme
 
-You can switch the built‑in highlighting theme via the `shikiTheme` prop (default: `github-light`):
+You can switch the built‑in highlighting theme via the `shikiTheme` prop.
+
+**Default Behavior:** If you do not provide a theme, it defaults to `undefined`. This triggers automatic system preference detection:
+- `github-light` when the user's system is in light mode
+- `github-dark` when the user's system is in dark mode (via `prefers-color-scheme: dark`)
+
+To force a specific theme:
 
 ```vue
 <StreamMarkdown :content="md" shiki-theme="github-dark" />
 ```
 
-Any valid Shiki theme name you have available can be passed. If you need multiple themes based on dark/light mode, you can conditionally bind the prop:
+Any valid Shiki theme name you have available can be passed.
+
+### 10.2 Dual Theme Support (Automatic Theme Switching)
+
+Instead of manually watching theme changes and reactively updating the prop, you can provide both light and dark themes for instant CSS-based theme switching:
 
 ```vue
-<StreamMarkdown
-    :content="md"
-    :shiki-theme="isDark ? 'github-dark' : 'github-light'"
+<!-- Dual theme (recommended) - instant switching via CSS -->
+<StreamMarkdown 
+  :shiki-theme="{ light: 'github-light', dark: 'github-dark' }" 
+  :content="md" 
 />
 ```
 
+When using dual themes:
+- Shiki generates CSS variables for both themes in a single render
+- Theme switching happens instantly via CSS class changes (no component re-render needed)
+- Add/remove `.dark` class on a parent element or rely on `@media (prefers-color-scheme: dark)`
+- No need to watch theme changes reactively
+- More efficient - eliminates unnecessary re-renders when toggling themes
+
+**Comparison:**
+
+```vue
+<!-- Single theme (old approach) - requires reactive updates & re-renders -->
+<StreamMarkdown 
+  :shiki-theme="isDark ? 'github-dark' : 'github-light'" 
+  :content="md" 
+/>
+
+<!-- Dual theme (new, recommended) - automatic via CSS -->
+<StreamMarkdown 
+  :shiki-theme="{ light: 'github-light', dark: 'github-dark' }" 
+  :content="md" 
+/>
+```
+
+The dual theme approach is the recommended pattern for applications with theme switching.
+
 > Note: The default build registers a compact set of common languages (TS/JS/JSON/Bash/Python/Diff/Markdown/Vue/HTML/CSS/Go/Rust/YAML). Add or remove grammars by calling `registerShikiLanguage(s)` before your first render (details below).
 
-### 9.2 Controlling the Shiki bundle
+### 10.3 Controlling the Shiki bundle
 
 - **`registerDefaultShikiLanguages()`** – invoked automatically when you import from `streamdown-vue`; registers the curated language set.
 - **`registerShikiLanguage(s)`** – call this in your own entry point to add or override grammars (local files or CDN-based loaders).
@@ -500,7 +536,7 @@ registerShikiLanguages([
 
 The default (non-core) entry automatically registers the curated set listed below. If you only ever highlight a smaller subset, switch to the core entry, register those languages, and your bundler will never even see the unused grammars.
 
-### 9.3 Preloaded Shiki Languages
+### 10.4 Preloaded Shiki Languages
 
 The built-in highlighter eagerly loads the grammars you register. The default bundle calls `registerDefaultShikiLanguages()` which wires up the following set:
 
@@ -534,7 +570,7 @@ The built-in highlighter eagerly loads the grammars you register. The default bu
 
 If you rarely show, for instance, Rust or Go snippets, simply omit them when calling `registerShikiLanguages`. Fences that reference an unregistered language fall back to plain `<pre><code>` (with a development warning) instead of pulling in extra grammars.
 
-### 9.4 Built‑in CodeBlock Features
+### 10.5 Built‑in CodeBlock Features
 
 `CodeBlock` now provides:
 
@@ -549,7 +585,7 @@ If you rarely show, for instance, Rust or Go snippets, simply omit them when cal
 | Global actions             | App `provide`                 | —       | Provide once: `app.provide(GLOBAL_CODE_BLOCK_ACTIONS, [MyBtn])`.                       |
 | Context access for actions | `inject(CODE_BLOCK_META_KEY)` | —       | Retrieve `{ code, language }` without prop drilling.                                   |
 
-### 9.3 Adding Custom Action Buttons (Without Forking)
+### 10.6 Adding Custom Action Buttons (Without Forking)
 
 You normally only use `<StreamMarkdown>`; customize all code blocks via pass‑through props:
 
@@ -616,7 +652,7 @@ export const MyShareButton = defineComponent({
 });
 ```
 
-### 9.4 Hiding Built‑ins
+### 10.7 Hiding Built‑ins
 
 If you want a fully custom action bar:
 
@@ -630,7 +666,7 @@ If you want a fully custom action bar:
 />
 ```
 
-### 9.5 Styling Line Numbers
+### 10.8 Styling Line Numbers
 
 Line numbers render as `<span class="code-line-number" data-line-number data-streamdown="code-line-number">`. Example Tailwind tweaks:
 
@@ -669,7 +705,7 @@ You can override it via `components` if you need advanced theming.
 
 ## 12. Math & LaTeX Helpers
 
-### 11.1 Default behavior
+### 12.1 Default behavior
 
 `StreamMarkdown` automatically injects `remark-math` + `rehype-katex` _unless you supply your own_ via the `remarkPlugins` prop. The built‑in configuration intentionally sets `singleDollarTextMath: false` so that plain currency like `$390K` or `$80–140K` is **not** misinterpreted as inline math (a common issue during streaming where a later `$` closes a huge unintended span).
 
@@ -678,7 +714,7 @@ Supported by default:
 -   Display math: `$$ ... $$`
 -   (If you add them) Inline math via `\( ... \)` or by providing your own `remark-math` with single‑dollar enabled.
 
-### 11.2 Opting into single‑dollar inline math
+### 12.2 Opting into single‑dollar inline math
 
 If you really want `$x + y$` style inline math, provide your own configured plugin tuple. When you do this the built‑in math plugin is skipped:
 
@@ -691,7 +727,7 @@ import remarkMath from 'remark-math';
 />
 ```
 
-### 11.3 Optional helper utilities
+### 12.3 Optional helper utilities
 
 We still expose some light repair helpers you can (optionally) run yourself before streaming completes:
 
@@ -742,14 +778,14 @@ Benchmarks (see `docs/performance.md`) show ~56ms render of the complex fixture 
 
 This section shows end‑to‑end integration in a Nuxt 3 project: installation, global registration, a streaming composable, and a server route that emits incremental Markdown.
 
-### 14.1 Install
+### 15.1 Install
 
 ```bash
 npm i streamdown-vue
 # or: bun add streamdown-vue
 ```
 
-### 14.2 Add a Client Plugin (Shiki + KaTeX)
+### 15.2 Add a Client Plugin (Shiki + KaTeX)
 
 Create `plugins/streamdown.client.ts` (client only so Shiki & Mermaid load in browser):
 
@@ -763,7 +799,7 @@ useShikiHighlighter();
 
 Nuxt auto‑registers anything in `plugins/`. No manual config required unless you disabled auto import.
 
-### 14.3 Basic Page Usage
+### 15.3 Basic Page Usage
 
 ```vue
 <!-- pages/index.vue -->
@@ -782,7 +818,7 @@ const md =
 </script>
 ```
 
-### 14.4 Global Component (Optional)
+### 15.4 Global Component (Optional)
 
 If you prefer auto‑import without explicit import each time, add an alias export file:
 
@@ -793,7 +829,7 @@ export { StreamMarkdown as default } from 'streamdown-vue';
 
 Now `<StreamMarkdown />` is available automatically (Nuxt scans `components/`).
 
-### 14.5 Secure Link / Image Allow‑Lists
+### 15.5 Secure Link / Image Allow‑Lists
 
 In any page/component:
 
@@ -808,7 +844,7 @@ In any page/component:
 
 Relative links (e.g. `/about`) will resolve against `defaultOrigin` then be validated.
 
-### 14.6 Streaming From a Server Route (SSE Style)
+### 15.6 Streaming From a Server Route (SSE Style)
 
 Create a route that emits partial Markdown pieces:
 
@@ -840,7 +876,7 @@ export default defineEventHandler(async (event) => {
 });
 ```
 
-### 14.7 Client Composable to Consume Streaming Markdown
+### 15.7 Client Composable to Consume Streaming Markdown
 
 ```ts
 // composables/useStreamedMarkdown.ts
@@ -871,7 +907,7 @@ export function useStreamedMarkdown(url: string) {
 }
 ```
 
-### 14.8 Streaming Page Example
+### 15.8 Streaming Page Example
 
 ```vue
 <!-- pages/stream.vue -->
@@ -886,13 +922,13 @@ const { rendered, start } = useStreamedMarkdown('/api/chat');
 </script>
 ```
 
-### 14.9 SSR Caveats
+### 15.9 SSR Caveats
 
 -   The stream loop runs only client-side; on first SSR render you may want a placeholder skeleton.
 -   Shiki highlighting of large code blocks happens client-side; if you need critical highlighted code for SEO, pre-process the markdown on the server and send the HTML (future enhancement: server highlight hook).
 -   Ensure Mermaid is only executed client-side (the provided plugin pattern handles this since the component executes render logic on mount).
 
-### 14.10 Troubleshooting
+### 15.10 Troubleshooting
 
 | Symptom                            | Fix                                                                                                                          |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
@@ -936,7 +972,7 @@ const remarkAppend = () => (tree: any) => {
 
 **Does it sanitize HTML?** Inline HTML is not allowed (passed through remark/rehype with `allowDangerousHtml: false`). Add a sanitizer plugin if you purposely enable raw HTML.
 
-**Dark mode highlighting?** Shiki is initialized with both a light & dark theme; you can swap classes on a container and CSS variables from Shiki handle the rest.
+**Dark mode highlighting?** Use the dual theme format: `:shiki-theme="{ light: 'github-light', dark: 'github-dark' }"` for instant CSS-based theme switching without re-renders, or pass a single theme string for traditional reactive theme switching.
 
 ---
 

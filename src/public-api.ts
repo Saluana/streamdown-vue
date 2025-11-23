@@ -1,4 +1,5 @@
-export { StreamMarkdown } from './StreamMarkdown';
+export { StreamMarkdown, StreamMarkdown as default } from './StreamMarkdown';
+export type { ShikiThemeConfig } from './types';
 export { default as CodeBlock } from './components/CodeBlock';
 export { default as MermaidBlock } from './components/MermaidBlock';
 export { default as CopyButton } from './components/CopyButton';
