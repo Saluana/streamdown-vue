@@ -138,7 +138,7 @@ createApp(App).mount('#app');
 
 ### Customizing with CSS Variables
 
-All styles use CSS variables prefixed with `--sd-*` that you can override:
+All styles use CSS variables prefixed with `--sd-*` that you can override. See the [full list of variables in style.css](./src/style.css).
 
 ```css
 :root {
