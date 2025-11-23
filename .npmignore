@@ -1,0 +1,18 @@
+# Exclude demo and development files
+quick-vite-demo/
+examples/
+__tests__/
+tests/
+*.test.ts
+*.test.js
+.tmp/
+bun.lock
+bun.lockb
+repomix-output.md
+vite.config.ts
+tsconfig.json
+tsconfig.build.json
+tsconfig.node.json
+.gitignore
+CLAUDE.md
+docs/
