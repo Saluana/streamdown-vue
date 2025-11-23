@@ -9,20 +9,21 @@
 1. Features
 2. Installation
 3. Quick Start (Basic SSR + CSR)
-4. Deep Dive Tutorial (Streaming from an AI / SSE source)
-5. Props Reference (All `<StreamMarkdown>` props)
-6. Component Slots & Overrides
-7. Built‑in Components & Data Attributes
-8. Security Model (Link/Image hardening)
-9. Syntax Highlighting (Shiki), Copy / Download & Extensible Actions
-10. Mermaid Diagrams
-11. Math & LaTeX Fixes
-12. Utilities (`parseBlocks`, `parseIncompleteMarkdown`, LaTeX helpers)
-13. Performance Tips
-14. Nuxt 3 Usage & SSR Notes
-15. Recipe Gallery
-16. FAQ
-17. Development & Contributing
+4. Default Styling & Customization
+5. Deep Dive Tutorial (Streaming from an AI / SSE source)
+6. Props Reference (All `<StreamMarkdown>` props)
+7. Component Slots & Overrides
+8. Built‑in Components & Data Attributes
+9. Security Model (Link/Image hardening)
+10. Syntax Highlighting (Shiki), Copy / Download & Extensible Actions
+11. Mermaid Diagrams
+12. Math & LaTeX Fixes
+13. Utilities (`parseBlocks`, `parseIncompleteMarkdown`, LaTeX helpers)
+14. Performance Tips
+15. Nuxt 3 Usage & SSR Notes
+16. Recipe Gallery
+17. FAQ
+18. Development & Contributing
 
 ---
 
@@ -105,7 +106,112 @@ const html = await renderToString(app);
 
 ---
 
-## 4. Deep Dive Tutorial – Live Streaming (AI / SSE)
+## 4. Default Styling & Customization
+
+### Importing the Default Stylesheet
+
+`streamdown-vue` ships with an optional built-in stylesheet that provides clean, neutral, and compact styling for all markdown elements. To use it:
+
+```ts
+import 'streamdown-vue/style.css';
+```
+
+**What's included:**
+- Neutral color scheme with automatic dark mode support
+- Compact, professional styling for tables and code blocks
+- Subtle, transparent scrollbars
+- Properly styled buttons, headings, lists, and blockquotes
+- Line number styling (when enabled)
+- All styles are scoped to `.streamdown-vue` to avoid conflicts
+
+**Example:**
+
+```ts
+// main.ts
+import { createApp } from 'vue';
+import App from './App.vue';
+import 'streamdown-vue/style.css'; // ← Import default styles
+import 'katex/dist/katex.min.css';
+
+createApp(App).mount('#app');
+```
+
+### Customizing with CSS Variables
+
+All styles use CSS variables prefixed with `--sd-*` that you can override:
+
+```css
+:root {
+  /* Colors */
+  --sd-primary: #3b82f6;              /* Accent color for links, headings */
+  --sd-primary-variant: #2563eb;      /* Hover states */
+  --sd-on-surface: #1f2937;           /* Text color */
+  --sd-surface-container: #f3f4f6;    /* Code block backgrounds */
+  --sd-border-color: #e5e7eb;         /* Borders */
+  
+  /* Typography */
+  --sd-font-family-base: system-ui, sans-serif;
+  --sd-font-family-mono: ui-monospace, monospace;
+  --sd-font-size-base: 16px;
+  --sd-line-height-base: 1.7;
+  
+  /* Dimensions */
+  --sd-border-width: 1px;
+  --sd-border-radius: 0.375rem;
+}
+```
+
+**Example - Custom Brand Colors:**
+
+```css
+:root {
+  --sd-primary: #8b5cf6;        /* Purple accent */
+  --sd-primary-variant: #7c3aed;
+}
+```
+
+### Dark Mode
+
+Dark mode is automatic via `@media (prefers-color-scheme: dark)` or by adding the `.dark` class to your `<html>` element:
+
+```ts
+// Toggle dark mode
+const toggleDark = () => {
+  document.documentElement.classList.toggle('dark');
+};
+```
+
+You can customize dark mode colors:
+
+```css
+:root.dark {
+  --sd-primary: #60a5fa;              /* Lighter blue for dark mode */
+  --sd-on-surface: #f3f4f6;           /* Light text */
+  --sd-surface-container: #374151;    /* Dark gray backgrounds */
+  --sd-border-color: #374151;
+}
+```
+
+### Completely Custom Styling
+
+If you prefer to write your own styles from scratch, simply **don't import** `streamdown-vue/style.css`. All markdown elements have `data-streamdown` attributes for easy targeting:
+
+```css
+/* Your custom styles */
+.streamdown-vue [data-streamdown='code-block'] {
+  /* Custom code block styling */
+}
+
+.streamdown-vue [data-streamdown='table'] {
+  /* Custom table styling */
+}
+```
+
+See section 9 (Built-in Components & Data Attributes) for a complete list of available attributes.
+
+---
+
+## 5. Deep Dive Tutorial – Live Streaming (AI / SSE)
 
 When receiving tokens / partial chunks you typically want to:
 
@@ -159,7 +265,7 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 
 ---
 
-## 5. Props Reference
+## 6. Props Reference
 
 | Prop                       | Type                       | Default                  | Description                                                                                                                                                                     |
 | -------------------------- | -------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -183,7 +289,7 @@ All unrecognised props are ignored (no arbitrary HTML injection for safety).
 
 ---
 
-## 6. Component Slots & Overrides
+## 7. Component Slots & Overrides
 
 `<StreamMarkdown>` does not expose custom slots for content fragments (the pipeline is AST-driven). To customize rendering you override tags via the `components` prop:
 
@@ -202,7 +308,7 @@ If a tag is missing from `components` it falls back to the built-in map.
 
 ---
 
-## 7. Built‑in Components & Data Attributes
+## 8. Built‑in Components & Data Attributes
 
 Each semantic node receives a `data-streamdown="name"` attribute to make styling and querying reliable, even if classes are overridden:
 
@@ -298,7 +404,7 @@ expect(html).toContain('data-streamdown="inline-code"');
 
 ---
 
-## 8. Security Model
+## 9. Security Model
 
 Only absolute URLs starting with an allowed prefix pass. Steps:
 
@@ -320,7 +426,7 @@ Example – allow only your CDN images & HTTPS links:
 
 ---
 
-## 9. Syntax Highlighting (Shiki), Copy / Download & Extensible Actions
+## 10. Syntax Highlighting (Shiki), Copy / Download & Extensible Actions
 
 Code fences are rendered by the internal `CodeBlock` component:
 
@@ -540,7 +646,7 @@ The default copy button uses the Clipboard API and toggles an icon for UX; the d
 
 ---
 
-## 10. Mermaid Diagrams
+## 11. Mermaid Diagrams
 
 Fenced block:
 
@@ -561,7 +667,7 @@ You can override it via `components` if you need advanced theming.
 
 ---
 
-## 11. Math & LaTeX Helpers
+## 12. Math & LaTeX Helpers
 
 ### 11.1 Default behavior
 
@@ -606,7 +712,7 @@ In streaming scenarios prefer leaving dollar signs untouched; the default config
 
 ---
 
-## 12. Utilities
+## 13. Utilities
 
 ### `parseIncompleteMarkdown(text: string)`
 
@@ -620,7 +726,7 @@ Usage inside a stream loop (see Tutorial above). Both exported from package root
 
 ---
 
-## 13. Performance Tips
+## 14. Performance Tips
 
 -   Debounce UI updates: apply repairs & re-render at ~30–60fps (e.g. `requestAnimationFrame`).
 -   Reuse a single `<StreamMarkdown>` instance; change only `content` prop.
@@ -632,7 +738,7 @@ Benchmarks (see `docs/performance.md`) show ~56ms render of the complex fixture 
 
 ---
 
-## 14. Nuxt 3 Usage & SSR Notes
+## 15. Nuxt 3 Usage & SSR Notes
 
 This section shows end‑to‑end integration in a Nuxt 3 project: installation, global registration, a streaming composable, and a server route that emits incremental Markdown.
 
@@ -800,7 +906,7 @@ That’s it—Nuxt integration is essentially drop‑in plus an optional streami
 
 ---
 
-## 15. Recipe Gallery
+## 16. Recipe Gallery
 
 | Goal                                  | Snippet                                                     |
 | ------------------------------------- | ----------------------------------------------------------- |
@@ -822,7 +928,7 @@ const remarkAppend = () => (tree: any) => {
 
 ---
 
-## 16. FAQ
+## 17. FAQ
 
 **Why repair outside instead of inside the component?** Control & transparency. You can decide when to re-render; the component focuses on a deterministic AST transform.
 
@@ -834,7 +940,7 @@ const remarkAppend = () => (tree: any) => {
 
 ---
 
-## 17. Development & Contributing
+## 18. Development & Contributing
 
 ```bash
 bun install

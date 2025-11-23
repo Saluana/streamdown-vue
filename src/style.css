@@ -1,0 +1,405 @@
+/* Streamdown Built-in Styles */
+:root {
+    /* Typography */
+    --sd-font-family-base: "IBM Plex Sans", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+    --sd-font-family-heading: "IBM Plex Sans", system-ui, sans-serif;
+    --sd-font-family-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --sd-font-family-code-header: var(--sd-font-family-base);
+    --sd-font-family-code: var(--sd-font-family-mono);
+
+    /* Colors */
+    --sd-primary: #3b82f6;
+    /* Blue 500 */
+    --sd-primary-variant: #2563eb;
+    /* Blue 600 */
+    --sd-on-primary: #ffffff;
+    --sd-surface: #ffffff;
+    --sd-on-surface: #1f2937;
+    /* Gray 800 */
+    --sd-surface-container: #f3f4f6;
+    /* Gray 100 */
+    --sd-surface-container-low: #f9fafb;
+    /* Gray 50 */
+    --sd-surface-container-lowest: #ffffff;
+    --sd-surface-container-high: #e5e7eb;
+    /* Gray 200 */
+    --sd-border-color: #e5e7eb;
+    /* Gray 200 */
+
+    /* Dimensions */
+    --sd-border-width: 1px;
+    --sd-border-radius: 0.375rem;
+    /* 6px */
+    --sd-font-size-base: 16px;
+    --sd-line-height-base: 1.7;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root {
+        --sd-primary: #60a5fa;
+        /* Blue 400 */
+        --sd-primary-variant: #93c5fd;
+        /* Blue 300 */
+        --sd-on-surface: #f3f4f6;
+        /* Gray 100 */
+        --sd-surface-container: #374151;
+        /* Gray 700 */
+        --sd-surface-container-low: #1f2937;
+        /* Gray 800 */
+        --sd-surface-container-lowest: #111827;
+        /* Gray 900 */
+        --sd-surface-container-high: #4b5563;
+        /* Gray 600 */
+        --sd-border-color: #374151;
+        /* Gray 700 */
+    }
+}
+
+:root.dark {
+    --sd-primary: #60a5fa;
+    /* Blue 400 */
+    --sd-primary-variant: #93c5fd;
+    /* Blue 300 */
+    --sd-on-surface: #f3f4f6;
+    /* Gray 100 */
+    --sd-surface-container: #374151;
+    /* Gray 700 */
+    --sd-surface-container-low: #1f2937;
+    /* Gray 800 */
+    --sd-surface-container-lowest: #111827;
+    /* Gray 900 */
+    --sd-surface-container-high: #4b5563;
+    /* Gray 600 */
+    --sd-border-color: #374151;
+    /* Gray 700 */
+}
+
+.streamdown-vue {
+    font-family: var(--sd-font-family-base) !important;
+    font-weight: 400;
+    font-size: var(--sd-font-size-base);
+    line-height: var(--sd-line-height-base);
+    color: var(--sd-on-surface);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.streamdown-vue p {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+    line-height: 1.5;
+    font-family: inherit !important;
+    font-weight: 400;
+}
+
+.streamdown-vue span,
+.streamdown-vue strong,
+.streamdown-vue em,
+.streamdown-vue b,
+.streamdown-vue i {
+    font-family: inherit;
+}
+
+.streamdown-vue h1,
+.streamdown-vue h2,
+.streamdown-vue h3,
+.streamdown-vue h4 {
+    font-family: var(--sd-font-family-heading) !important;
+    color: var(--sd-primary);
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+    line-height: 1.3;
+    font-weight: 600;
+}
+
+.streamdown-vue h1 {
+    font-size: 1.875rem;
+    border-bottom: var(--sd-border-width) solid var(--sd-border-color);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.streamdown-vue hr {
+    border: 0;
+    border-top: var(--sd-border-width) solid var(--sd-border-color);
+    margin: 2rem 0;
+    opacity: 0.5;
+}
+
+.streamdown-vue h2 {
+    font-size: 1.5rem;
+}
+
+.streamdown-vue h3 {
+    font-size: 1.25rem;
+}
+
+.streamdown-vue a {
+    color: var(--sd-primary);
+    text-decoration: underline;
+}
+
+.streamdown-vue a:hover {
+    color: var(--sd-primary-variant);
+}
+
+.streamdown-vue code {
+    background: var(--sd-surface-container);
+    padding: 0.1rem 0.1rem;
+    color: var(--sd-on-surface);
+    font-family: var(--sd-font-family-mono);
+    font-size: 0.9em;
+}
+
+@media (prefers-color-scheme: dark) {
+    .streamdown-vue code {
+        color: white !important;
+    }
+}
+
+.streamdown-vue pre {
+    padding: 1rem;
+    border-radius: var(--sd-border-radius);
+    border: var(--sd-border-width) solid var(--sd-border-color);
+    overflow-x: auto;
+    margin: 1rem 0;
+    font-weight: 505;
+}
+
+.streamdown-vue pre code {
+    background: transparent;
+    padding: 0;
+    border: none;
+    font-size: var(--sd-font-size-base);
+}
+
+/* Streamdown code blocks */
+.streamdown-vue [data-streamdown='code-block'] {
+    margin: 1rem 0;
+    border: var(--sd-border-width) solid var(--sd-border-color);
+    border-radius: var(--sd-border-radius);
+    overflow: hidden;
+}
+
+/* Streamdown code blocks */
+.streamdown-vue [data-streamdown='code-body'] {
+    padding-bottom: 0 !important;
+}
+
+/* Streamdown code blocks */
+.streamdown-vue [data-streamdown='pre'] {
+    padding-bottom: 20px !important;
+}
+
+.streamdown-vue [data-streamdown='code-block-header'] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.25rem 0.75rem;
+    background: transparent;
+    border-bottom: var(--sd-border-width) solid var(--sd-border-color);
+    font-family: var(--sd-font-family-code-header);
+    font-size: 0.875rem;
+    color: var(--sd-on-surface);
+    opacity: 0.9;
+}
+
+.streamdown-vue [data-streamdown='code-lang'] {
+    text-transform: uppercase;
+    color: var(--sd-on-surface);
+    letter-spacing: 0.5px;
+    font-size: 10px !important;
+    opacity: 0.7;
+}
+
+.streamdown-vue [data-streamdown='code'] {
+    font-family: var(--sd-font-family-code) !important;
+    font-size: 0.875em !important;
+}
+
+.streamdown-vue [data-streamdown='code-body'] {
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+.streamdown-vue [data-streamdown='code-body'] pre {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+}
+
+.streamdown-vue [data-streamdown='copy-button'],
+.streamdown-vue [data-streamdown='download-button'] {
+    padding: 0.15rem 0.4rem;
+    background: transparent;
+    color: var(--sd-on-surface);
+    border: 1px solid transparent;
+    border-radius: var(--sd-border-radius);
+    cursor: pointer;
+    font-size: 0.65rem;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    line-height: 1;
+    opacity: 0.6;
+}
+
+.streamdown-vue [data-streamdown='copy-button'] svg,
+.streamdown-vue [data-streamdown='download-button'] svg {
+    width: 12px;
+    height: 12px;
+}
+
+.streamdown-vue [data-streamdown='code-line-number'] {
+    opacity: 0.4;
+    user-select: none;
+    padding-right: 0.5rem;
+}
+
+/* General button styles */
+.streamdown-vue button {
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    background: #eee;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-family: inherit;
+    font-size: 0.875rem;
+}
+
+:root.dark .streamdown-vue button {
+    background: #374151;
+    color: white;
+    border-color: #4b5563;
+}
+
+.streamdown-vue [data-streamdown='copy-button']:hover,
+.streamdown-vue [data-streamdown='download-button']:hover {
+    background: var(--sd-surface-container);
+    border-color: var(--sd-border-color);
+    opacity: 1;
+}
+
+.streamdown-vue blockquote {
+    border-left: 4px solid var(--sd-primary);
+    padding-left: 1rem;
+    margin: 1rem 0;
+    font-style: italic;
+}
+
+.streamdown-vue ul,
+.streamdown-vue ol {
+    margin: 1rem 0;
+    padding-left: 2rem;
+}
+
+.streamdown-vue li {
+    margin: 0.5rem 0;
+}
+
+.streamdown-vue th {
+    border-bottom: var(--sd-border-width) solid var(--sd-border-color);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    color: var(--sd-on-surface);
+    font-size: 0.875rem;
+    white-space: nowrap;
+    background: transparent;
+    font-weight: 600;
+}
+
+.streamdown-vue td {
+    border-bottom: var(--sd-border-width) solid var(--sd-border-color);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.875rem;
+}
+
+/* Safety net for table layout */
+.streamdown-vue [data-streamdown='table-wrapper'] {
+    border: var(--sd-border-width) solid var(--sd-border-color);
+    border-radius: var(--sd-border-radius);
+    margin-top: 32px !important;
+    margin-bottom: 32px;
+    overflow-x: auto;
+    width: 100%;
+    display: block;
+}
+
+.streamdown-vue [data-streamdown='table'] {
+    margin-bottom: 0px;
+    margin-top: 0px;
+    border-bottom: none;
+    border-left: none;
+    border-right: none;
+    width: auto;
+    min-width: min-content;
+}
+
+.streamdown-vue [data-streamdown='th'] {
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: var(--sd-border-width) solid var(--sd-border-color);
+    font-weight: 600;
+    border-top: none;
+    white-space: nowrap;
+}
+
+.streamdown-vue [data-streamdown='table'] [data-streamdown='tr']>[data-streamdown='th']:first-child,
+.streamdown-vue [data-streamdown='table'] [data-streamdown='tr']>[data-streamdown='td']:first-child {
+    border-left: 0;
+}
+
+.streamdown-vue [data-streamdown='table'] [data-streamdown='tr']>[data-streamdown='th']:last-child,
+.streamdown-vue [data-streamdown='table'] [data-streamdown='tr']>[data-streamdown='td']:last-child {
+    border-right: 0;
+}
+
+.streamdown-vue [data-streamdown='tbody'] [data-streamdown='tr']:last-child [data-streamdown='td'] {
+    border-bottom: 0;
+}
+
+/* Zebra striping removed for minimalist style */
+.streamdown-vue [data-streamdown='tbody'] [data-streamdown='tr']:nth-child(even) {
+    background: transparent;
+}
+
+.streamdown-vue [data-streamdown='tbody'] [data-streamdown='tr']:nth-child(odd) {
+    background: transparent;
+}
+
+/* Optional hover highlight */
+.streamdown-vue [data-streamdown='tbody'] [data-streamdown='tr']:hover {
+    background: var(--sd-surface-container-high);
+}
+
+.streamdown-vue [data-streamdown='code-line-number'] {
+    margin-right: 12px;
+    padding: 20px;
+}
+
+.streamdown-vue pre {
+    padding-left: 0;
+}
+
+/* Custom Scrollbar */
+.streamdown-vue ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.streamdown-vue ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.streamdown-vue ::-webkit-scrollbar-thumb {
+    background: var(--sd-border-color);
+    border-radius: 3px;
+}
+
+.streamdown-vue ::-webkit-scrollbar-thumb:hover {
+    background: var(--sd-on-surface);
+    opacity: 0.5;
+}

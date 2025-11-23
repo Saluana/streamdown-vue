@@ -1,6 +1,6 @@
 {
     "name": "streamdown-vue",
-    "version": "1.0.25",
+    "version": "1.0.26",
     "description": "Streamdown-style streaming Markdown renderer for Vue 3/Nuxt 3 with Shiki, KaTeX, Mermaid, and secure streaming helpers.",
     "type": "module",
     "main": "dist/index.cjs.js",
@@ -16,7 +16,8 @@
             "types": "./dist/core.d.ts",
             "import": "./dist/core.es.js",
             "require": "./dist/core.cjs.js"
-        }
+        },
+        "./style.css": "./src/style.css"
     },
     "scripts": {
         "dev": "vite examples/basic",
