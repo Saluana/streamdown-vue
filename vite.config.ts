@@ -1,16 +1,17 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import dts from 'vite-plugin-dts';
+import dts from 'unplugin-dts/vite';
 
 export default defineConfig({
     plugins: [
         vue(),
         dts({
             include: ['index.ts', 'core.ts', 'src', 'lib'],
-            outDir: 'dist',
+            outDirs: 'dist',
             insertTypesEntry: true,
-            // Roll up all d.ts into a single entry (reduces published size)
-            rollupTypes: true,
+            processor: 'ts',
+            // Bundle all d.ts into a single entry per library entry point.
+            bundleTypes: true,
         }),
     ],
     define: {
@@ -54,8 +55,8 @@ export default defineConfig({
         },
         // Disable source maps for published build to reduce package size.
         sourcemap: false,
-        // Use esbuild minification (fast) with higher target for smaller output
-        minify: 'esbuild',
+        // Vite 8 uses Oxc for minification; avoid the deprecated esbuild fallback.
+        minify: 'oxc',
         target: 'es2022',
     },
 });
