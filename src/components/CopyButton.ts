@@ -1,5 +1,5 @@
 import { defineComponent, h, ref, inject } from 'vue';
-import { Copy, Check } from 'lucide-vue-next';
+import { Copy, Check } from '@lucide/vue';
 import { CODE_BLOCK_META_KEY } from './codeblock-context';
 
 export default defineComponent({
