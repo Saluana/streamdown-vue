@@ -1,5 +1,5 @@
 import { defineComponent, h, inject } from 'vue';
-import { Download } from 'lucide-vue-next';
+import { Download } from '@lucide/vue';
 import { CODE_BLOCK_META_KEY } from './codeblock-context';
 
 // Basic language->extension mapping (subset; users can override by wrapping component)
