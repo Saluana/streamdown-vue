@@ -1,19 +1,11 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import dts from 'unplugin-dts/vite';
 
 export default defineConfig({
-    plugins: [
-        vue(),
-        dts({
-            include: ['index.ts', 'core.ts', 'src', 'lib'],
-            outDirs: 'dist',
-            insertTypesEntry: true,
-            processor: 'ts',
-            // Bundle all d.ts into a single entry per library entry point.
-            bundleTypes: true,
-        }),
-    ],
+    // Declaration files are emitted by `bun run build:types` before Vite runs.
+    // Keeping type generation in one place avoids a redundant declaration plugin
+    // and API Extractor compatibility issues with newer TypeScript versions.
+    plugins: [vue()],
     define: {
         'process.env.NODE_ENV': '"production"',
     },
