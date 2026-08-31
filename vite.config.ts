@@ -10,6 +10,8 @@ export default defineConfig({
         'process.env.NODE_ENV': '"production"',
     },
     build: {
+        // `build:types` writes declarations to dist before Vite runs. Preserve them.
+        emptyOutDir: false,
         lib: {
             entry: {
                 index: 'index.ts',
