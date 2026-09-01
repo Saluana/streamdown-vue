@@ -1,22 +1,20 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import dts from 'vite-plugin-dts';
 
 export default defineConfig({
-    plugins: [
-        vue(),
-        dts({
-            include: ['index.ts', 'core.ts', 'src', 'lib'],
-            outDir: 'dist',
-            insertTypesEntry: true,
-            // Roll up all d.ts into a single entry (reduces published size)
-            rollupTypes: true,
-        }),
-    ],
+    // Declaration files are emitted by `bun run build:types` before Vite runs.
+    // Keeping type generation in one place avoids a redundant declaration plugin
+    // and API Extractor compatibility issues with newer TypeScript versions.
+    plugins: [vue()],
     define: {
         'process.env.NODE_ENV': '"production"',
+        __VUE_OPTIONS_API__: true,
+        __VUE_PROD_DEVTOOLS__: false,
+        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
     },
     build: {
+        // `build:types` writes declarations to dist before Vite runs. Preserve them.
+        emptyOutDir: false,
         lib: {
             entry: {
                 index: 'index.ts',
@@ -27,7 +25,7 @@ export default defineConfig({
             fileName: (format: string, entryName: string) =>
                 format === 'es'
                     ? `${entryName}.es.js`
-                    : `${entryName}.cjs.js`,
+                    : `${entryName}.cjs`,
         },
         rollupOptions: {
             external: [
@@ -54,8 +52,8 @@ export default defineConfig({
         },
         // Disable source maps for published build to reduce package size.
         sourcemap: false,
-        // Use esbuild minification (fast) with higher target for smaller output
-        minify: 'esbuild',
+        // Vite 8 uses Oxc for minification; avoid the deprecated esbuild fallback.
+        minify: 'oxc',
         target: 'es2022',
     },
 });

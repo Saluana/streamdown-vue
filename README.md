@@ -678,7 +678,7 @@ Line numbers render as `<span class="code-line-number" data-line-number data-str
 
 The default copy & download buttons can be selectively hidden while still using custom actions.
 
-The default copy button uses the Clipboard API and toggles an icon for UX; the download button creates a Blob and triggers a synthetic click.
+The default copy button uses the Clipboard API and toggles its success icon only after the write completes; the download button creates a UTF-8 text Blob and triggers a synthetic click.
 
 ---
 
@@ -980,8 +980,10 @@ const remarkAppend = () => (tree: any) => {
 
 ```bash
 bun install
-bun test          # run tests (fast)
-bun run build     # build library (types + bundles)
+bun test              # run unit and rendering tests (fast)
+bun run typecheck     # check source, tests, and examples
+bun run build         # build declarations, ESM/CJS bundles, and CSS
+bun run test          # full release gate, including a packed consumer smoke
 ```
 
 PRs for: improved matrix handling, plugin toggles, directive support, performance instrumentation are appreciated.

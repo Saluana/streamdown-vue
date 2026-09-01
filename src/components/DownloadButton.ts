@@ -1,5 +1,5 @@
 import { defineComponent, h, inject } from 'vue';
-import { Download } from 'lucide-vue-next';
+import { Download } from '@lucide/vue';
 import { CODE_BLOCK_META_KEY } from './codeblock-context';
 
 // Basic language->extension mapping (subset; users can override by wrapping component)
@@ -23,6 +23,19 @@ const EXT_MAP: Record<string, string> = {
     rs: 'rs',
 };
 
+export function createCodeDownload(
+    code: string,
+    language = '',
+    filename?: string
+): { blob: Blob; filename: string } | null {
+    if (!code) return null;
+    const ext = (language && EXT_MAP[language.toLowerCase()]) || 'txt';
+    return {
+        blob: new Blob([code], { type: 'text/plain;charset=utf-8' }),
+        filename: filename || `file.${ext}`,
+    };
+}
+
 export default defineComponent({
     name: 'DownloadButton',
     props: {
@@ -34,17 +47,17 @@ export default defineComponent({
         const meta = inject(CODE_BLOCK_META_KEY, { code: '', language: '' });
         const download = () => {
             const code = props.text ?? meta.code;
-            if (!code) return;
-            const ext =
-                (meta.language && EXT_MAP[meta.language.toLowerCase()]) ||
-                'txt';
-            const name = props.filename || `file.${ext}`;
+            const file = createCodeDownload(
+                code,
+                meta.language,
+                props.filename
+            );
+            if (!file) return;
             try {
-                const blob = new Blob([code], { type: 'text/plain' });
-                const url = URL.createObjectURL(blob);
+                const url = URL.createObjectURL(file.blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = name;
+                a.download = file.filename;
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);

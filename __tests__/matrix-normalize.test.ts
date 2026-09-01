@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'bun:test';
 import { fixMatrix, normalizeDisplayMath } from '../lib/latex-utils';
 
 describe('matrix display math normalization', () => {
@@ -15,7 +16,7 @@ describe('matrix display math normalization', () => {
         const dataRows = lines.filter((l) => /&/.test(l));
         expect(dataRows.length).toBe(2);
         const [r1, r2] = dataRows;
-        expect(/\\\\\s*$/.test(r1)).toBe(true);
-        expect(/\\\\\s*$/.test(r2)).toBe(false);
+        expect(/\\\\\s*$/.test(r1!)).toBe(true);
+        expect(/\\\\\s*$/.test(r2!)).toBe(false);
     });
 });
