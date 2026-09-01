@@ -8,6 +8,9 @@ export default defineConfig({
     plugins: [vue()],
     define: {
         'process.env.NODE_ENV': '"production"',
+        __VUE_OPTIONS_API__: true,
+        __VUE_PROD_DEVTOOLS__: false,
+        __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
     },
     build: {
         // `build:types` writes declarations to dist before Vite runs. Preserve them.
@@ -22,7 +25,7 @@ export default defineConfig({
             fileName: (format: string, entryName: string) =>
                 format === 'es'
                     ? `${entryName}.es.js`
-                    : `${entryName}.cjs.js`,
+                    : `${entryName}.cjs`,
         },
         rollupOptions: {
             external: [

@@ -2,6 +2,24 @@ import { defineComponent, h, ref, inject } from 'vue';
 import { Copy, Check } from '@lucide/vue';
 import { CODE_BLOCK_META_KEY } from './codeblock-context';
 
+interface ClipboardWriter {
+    writeText(text: string): Promise<void>;
+}
+
+export async function writeClipboardText(
+    text: string,
+    clipboard: ClipboardWriter | undefined =
+        typeof navigator === 'undefined' ? undefined : navigator.clipboard
+): Promise<boolean> {
+    if (!text || !clipboard?.writeText) return false;
+    try {
+        await clipboard.writeText(text);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
 export default defineComponent({
     name: 'CopyButton',
     props: {
@@ -13,17 +31,12 @@ export default defineComponent({
         const copied = ref(false);
         const meta = inject(CODE_BLOCK_META_KEY, { code: '', language: '' });
         const copy = async () => {
-            try {
-                const txt = props.text ?? meta.code;
-                if (!txt) return;
-                await navigator.clipboard?.writeText(txt);
-                copied.value = true;
-                setTimeout(() => {
-                    copied.value = false;
-                }, 2000);
-            } catch {
-                // ignore copy errors
-            }
+            const txt = props.text ?? meta.code;
+            if (!(await writeClipboardText(txt))) return;
+            copied.value = true;
+            setTimeout(() => {
+                copied.value = false;
+            }, 2000);
         };
         return () =>
             h(

@@ -220,17 +220,42 @@ const testResults = ref<TestResult[]>([]);
 const runningTests = ref(false);
 const renderContainer = ref<HTMLElement | null>(null);
 
+async function waitForAsyncFeatures(root: HTMLElement) {
+    const deadline = performance.now() + 5000;
+    while (performance.now() < deadline) {
+        const mermaidBlocks = Array.from(
+            root.querySelectorAll('[data-streamdown="mermaid"]')
+        );
+        const mermaidPending = mermaidBlocks.some(
+            (block) =>
+                !block.querySelector('svg') &&
+                !block.querySelector('.text-red-500')
+        );
+        const codeBlocks = root.querySelectorAll(
+            '[data-streamdown="code-block"]'
+        );
+        const highlightingPending =
+            codeBlocks.length > 0 &&
+            !root.querySelector(
+                '[data-streamdown="code-block"] span[style*="color:"]'
+            );
+        if (!mermaidPending && !highlightingPending) return;
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+    }
+}
+
 async function runClientTests() {
     if (!renderContainer.value) return;
     runningTests.value = true;
     await nextTick();
     const root = renderContainer.value;
+    await waitForAsyncFeatures(root);
     const results: TestResult[] = [];
     const push = (name: string, pass: boolean, details?: string) =>
         results.push({ name, pass, details });
     push(
-        'mermaid present',
-        !!root.querySelector('[data-streamdown="mermaid"]')
+        'mermaid SVG rendered',
+        !!root.querySelector('[data-streamdown="mermaid"] svg')
     );
     push('math present', !!root.querySelector('.katex'));
     push(
@@ -254,25 +279,46 @@ async function runClientTests() {
     );
     const badImg = !!root.querySelector('img[src*="bad.local"]');
     push('disallowed image removed', !badImg);
-    const matrix = Array.from(root.querySelectorAll('.katex')).some(
-        (k) => /1\/3/.test(k.textContent || '') && /1/.test(k.textContent || '')
-    );
+    const matrix = !!root.querySelector('.katex mtable');
     push('matrix rendered', matrix);
+    push(
+        'copy button present',
+        !!root.querySelector('[data-streamdown="copy-button"]')
+    );
+    push(
+        'download button present',
+        !!root.querySelector('[data-streamdown="download-button"]')
+    );
     // Test: single-dollar inline math should NOT be auto-parsed by default configuration.
     // We included `$E=mc^2$` and `$a^2 + b^2 = c^2$` in the stream. They should appear as plain text,
     // i.e. not inside any .katex node because singleDollarTextMath is disabled by default.
-    const inlineInKatex = Array.from(root.querySelectorAll('.katex')).some(
-        (k) => /E=mc\^2|a\^2 \+ b\^2 = c\^2/.test(k.textContent || '')
+    const isPlainText = (literal: string) =>
+        Array.from(root.querySelectorAll('*')).some(
+            (element) =>
+                !element.closest('.katex') &&
+                Array.from(element.childNodes).some(
+                    (node) =>
+                        node.nodeType === Node.TEXT_NODE &&
+                        node.textContent?.includes(literal)
+                )
+        );
+    const inlineEnergyIsPlainText = isPlainText('$E=mc^2$');
+    const inlinePythagoreanIsPlainText = isPlainText(
+        '$a^2 + b^2 = c^2$'
     );
     push(
         'single-dollar inline NOT rendered as math',
-        !inlineInKatex,
-        inlineInKatex ? 'inline dollars unexpectedly parsed' : undefined
+        inlineEnergyIsPlainText,
+        inlineEnergyIsPlainText
+            ? undefined
+            : 'inline dollars unexpectedly parsed'
     );
     push(
-        '$ HELLO MY MAN $',
-        !inlineInKatex,
-        inlineInKatex ? 'inline dollars unexpectedly parsed' : undefined
+        'single-dollar Pythagorean inline NOT rendered as math',
+        inlinePythagoreanIsPlainText,
+        inlinePythagoreanIsPlainText
+            ? undefined
+            : 'inline dollars unexpectedly parsed'
     );
     testResults.value = results;
     runningTests.value = false;
@@ -310,7 +356,10 @@ function pushNext(i: number) {
     chunkCount.value++;
     lastChunkAt.value = performance.now();
     log('chunk', i, { len: piece.length, cumulative: totalBytes.value });
-    timer = window.setTimeout(() => pushNext(i + 1), 160); // quicker cadence
+    timer = window.setTimeout(
+        () => pushNext(i + 1),
+        stress.value ? 16 : 160
+    );
 }
 
 function startStream() {
