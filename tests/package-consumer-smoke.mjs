@@ -16,13 +16,18 @@ const packageJson = JSON.parse(
     readFileSync(path.join(packageRoot, 'package.json'), 'utf8')
 );
 const tempRoot = mkdtempSync(path.join(tmpdir(), 'streamdown-vue-smoke-'));
+const npmEnvironment = {
+    ...process.env,
+    npm_config_dry_run: 'false',
+    NPM_CONFIG_DRY_RUN: 'false',
+};
 
 try {
     const packResult = JSON.parse(
         execFileSync(
             'npm',
             ['pack', '--json', '--pack-destination', tempRoot],
-            { cwd: packageRoot, encoding: 'utf8' }
+            { cwd: packageRoot, encoding: 'utf8', env: npmEnvironment }
         )
     )[0];
     const packedFiles = new Set(packResult.files.map((file) => file.path));
@@ -59,7 +64,7 @@ try {
     execFileSync(
         'npm',
         ['install', '--ignore-scripts', '--no-audit', '--no-fund'],
-        { cwd: consumerRoot, stdio: 'pipe' }
+        { cwd: consumerRoot, stdio: 'pipe', env: npmEnvironment }
     );
 
     const smokeScript = `
