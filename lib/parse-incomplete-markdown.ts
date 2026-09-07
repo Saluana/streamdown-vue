@@ -9,12 +9,79 @@ const strikethroughPattern = /(~~)([^~]*?)$/;
 // Removed inlineKatexPattern - no longer processing single dollar signs
 const blockKatexPattern = /(\$\$)([^$]*?)$/;
 
-// Helper function to check if we have a complete code block
-const hasCompleteCodeBlock = (text: string): boolean => {
-    const tripleBackticks = (text.match(/```/g) || []).length;
-    return (
-        tripleBackticks > 0 && tripleBackticks % 2 === 0 && text.includes('\n')
-    );
+// Replaces every character inside a fenced code block or an inline code span
+// with a space (newlines are kept so line-based checks keep working). Counting
+// delimiters on the masked text keeps code content like globs (`**/*.ts`) or
+// like python dunder functions (`__init__`) from being mistaken for unterminated
+// emphasis. An unterminated code region masks the rest of the text, since anything
+// after the opening delimiter is code until it is closed.
+const maskCodeRegions = (text: string): string => {
+    const chars = text.split('');
+    const maskRange = (start: number, end: number) => {
+        for (let i = start; i < end; i++) {
+            if (chars[i] !== '\n') {
+                chars[i] = ' ';
+            }
+        }
+    };
+
+    let index = 0;
+    while (index < text.length) {
+        if (text[index] !== '`') {
+            index++;
+            continue;
+        }
+
+        let runEnd = index;
+        while (runEnd < text.length && text[runEnd] === '`') {
+            runEnd++;
+        }
+        const runLength = runEnd - index;
+        const atLineStart = /(?:^|\n)[ \t]*$/.test(text.slice(0, index));
+
+        // A run of three or more backticks at the start of a line opens a
+        // fenced block that runs until a closing fence of at least that length.
+        if (runLength >= 3 && atLineStart) {
+            const closingFence = new RegExp(
+                `\\n[ \\t]*\`{${runLength},}[ \\t]*(?:\\n|$)`
+            );
+            const rest = text.slice(runEnd);
+            const closingMatch = rest.match(closingFence);
+            const end =
+                closingMatch && closingMatch.index !== undefined
+                    ? runEnd + closingMatch.index + closingMatch[0].length
+                    : text.length;
+            maskRange(index, end);
+            index = end;
+            continue;
+        }
+
+        // Otherwise this opens an inline code span, closed by a backtick run of
+        // exactly the same length.
+        let cursor = runEnd;
+        let closed = false;
+        while (cursor < text.length) {
+            if (text[cursor] !== '`') {
+                cursor++;
+                continue;
+            }
+            let closeEnd = cursor;
+            while (closeEnd < text.length && text[closeEnd] === '`') {
+                closeEnd++;
+            }
+            if (closeEnd - cursor === runLength) {
+                cursor = closeEnd;
+                closed = true;
+                break;
+            }
+            cursor = closeEnd;
+        }
+        const end = closed ? cursor : text.length;
+        maskRange(index, end);
+        index = end;
+    }
+
+    return chars.join('');
 };
 
 // Handles incomplete links and images by removing them if not closed
@@ -36,15 +103,11 @@ const handleIncompleteLinksAndImages = (text: string): string => {
 
 // Completes incomplete bold formatting (**)
 const handleIncompleteBold = (text: string): string => {
-    // Don't process if inside a complete code block
-    if (hasCompleteCodeBlock(text)) {
-        return text;
-    }
-
-    const boldMatch = text.match(boldPattern);
+    const masked = maskCodeRegions(text);
+    const boldMatch = masked.match(boldPattern);
 
     if (boldMatch) {
-        const asteriskPairs = (text.match(/\*\*/g) || []).length;
+        const asteriskPairs = (masked.match(/\*\*/g) || []).length;
         if (asteriskPairs % 2 === 1) {
             return `${text}**`;
         }
@@ -55,10 +118,11 @@ const handleIncompleteBold = (text: string): string => {
 
 // Completes incomplete italic formatting with double underscores (__)
 const handleIncompleteDoubleUnderscoreItalic = (text: string): string => {
-    const italicMatch = text.match(italicPattern);
+    const masked = maskCodeRegions(text);
+    const italicMatch = masked.match(italicPattern);
 
     if (italicMatch) {
-        const underscorePairs = (text.match(/__/g) || []).length;
+        const underscorePairs = (masked.match(/__/g) || []).length;
         if (underscorePairs % 2 === 1) {
             return `${text}__`;
         }
@@ -109,15 +173,11 @@ const countSingleAsterisks = (text: string): number => {
 
 // Completes incomplete italic formatting with single asterisks (*)
 const handleIncompleteSingleAsteriskItalic = (text: string): string => {
-    // Don't process if inside a complete code block
-    if (hasCompleteCodeBlock(text)) {
-        return text;
-    }
-
-    const singleAsteriskMatch = text.match(singleAsteriskPattern);
+    const masked = maskCodeRegions(text);
+    const singleAsteriskMatch = masked.match(singleAsteriskPattern);
 
     if (singleAsteriskMatch) {
-        const singleAsterisks = countSingleAsterisks(text);
+        const singleAsterisks = countSingleAsterisks(masked);
         if (singleAsterisks % 2 === 1) {
             return `${text}*`;
         }
@@ -179,15 +239,11 @@ const countSingleUnderscores = (text: string): number => {
 
 // Completes incomplete italic formatting with single underscores (_)
 const handleIncompleteSingleUnderscoreItalic = (text: string): string => {
-    // Don't process if inside a complete code block
-    if (hasCompleteCodeBlock(text)) {
-        return text;
-    }
-
-    const singleUnderscoreMatch = text.match(singleUnderscorePattern);
+    const masked = maskCodeRegions(text);
+    const singleUnderscoreMatch = masked.match(singleUnderscorePattern);
 
     if (singleUnderscoreMatch) {
-        const singleUnderscores = countSingleUnderscores(text);
+        const singleUnderscores = countSingleUnderscores(masked);
         if (singleUnderscores % 2 === 1) {
             return `${text}_`;
         }
@@ -269,10 +325,11 @@ const handleIncompleteInlineCode = (text: string): string => {
 
 // Completes incomplete strikethrough formatting (~~)
 const handleIncompleteStrikethrough = (text: string): string => {
-    const strikethroughMatch = text.match(strikethroughPattern);
+    const masked = maskCodeRegions(text);
+    const strikethroughMatch = masked.match(strikethroughPattern);
 
     if (strikethroughMatch) {
-        const tildePairs = (text.match(/~~/g) || []).length;
+        const tildePairs = (masked.match(/~~/g) || []).length;
         if (tildePairs % 2 === 1) {
             return `${text}~~`;
         }
@@ -301,9 +358,9 @@ const countSingleDollarSigns = (text: string): number => {
 
 // Completes incomplete block KaTeX formatting ($$)
 const handleIncompleteBlockKatex = (text: string): string => {
-    const original = text;
     // Count all $$ pairs in the text
-    const dollarPairs = (text.match(/\$\$/g) || []).length;
+    const masked = maskCodeRegions(text);
+    const dollarPairs = (masked.match(/\$\$/g) || []).length;
     // if odd number of $$ we attempt to close it later (no logging in production)
 
     // If we have an even number of $$, the block is complete
@@ -314,8 +371,8 @@ const handleIncompleteBlockKatex = (text: string): string => {
     // If there is an unmatched \begin{...} environment (e.g. matrix, pmatrix, align)
     // we defer auto-closing the math block so the environment can finish in later chunks.
     // Otherwise we'd split the environment across two display math blocks and break KaTeX.
-    const beginCount = (text.match(/\\begin\{[^}]+\}/g) || []).length;
-    const endCount = (text.match(/\\end\{[^}]+\}/g) || []).length;
+    const beginCount = (masked.match(/\\begin\{[^}]+\}/g) || []).length;
+    const endCount = (masked.match(/\\end\{[^}]+\}/g) || []).length;
     // If we have any imbalance in environments (either missing \end OR missing \begin),
     // defer auto-closing so that KaTeX does not attempt to parse a malformed block
     // which commonly triggers alignment (&) parse errors in streaming scenarios.
@@ -323,9 +380,10 @@ const handleIncompleteBlockKatex = (text: string): string => {
 
     // If we have an odd number, add closing $$
     // Check if this looks like a multi-line math block (contains newlines after opening $$)
-    const firstDollarIndex = text.indexOf('$$');
+    const firstDollarIndex = masked.indexOf('$$');
     const hasNewlineAfterStart =
-        firstDollarIndex !== -1 && text.indexOf('\n', firstDollarIndex) !== -1;
+        firstDollarIndex !== -1 &&
+        masked.indexOf('\n', firstDollarIndex) !== -1;
 
     // For multi-line blocks, add newline before closing $$ if not present
     if (hasNewlineAfterStart && !text.endsWith('\n')) return `${text}\n$$`;
@@ -362,21 +420,17 @@ const countTripleAsterisks = (text: string): number => {
 
 // Completes incomplete bold-italic formatting (***)
 const handleIncompleteBoldItalic = (text: string): string => {
-    // Don't process if inside a complete code block
-    if (hasCompleteCodeBlock(text)) {
-        return text;
-    }
-
     // Don't process if text is only asterisks and has 4 or more consecutive asterisks
     // This prevents cases like **** from being treated as incomplete ***
     if (/^\*{4,}$/.test(text)) {
         return text;
     }
 
-    const boldItalicMatch = text.match(boldItalicPattern);
+    const masked = maskCodeRegions(text);
+    const boldItalicMatch = masked.match(boldItalicPattern);
 
     if (boldItalicMatch) {
-        const tripleAsteriskCount = countTripleAsterisks(text);
+        const tripleAsteriskCount = countTripleAsterisks(masked);
         if (tripleAsteriskCount % 2 === 1) {
             return `${text}***`;
         }
