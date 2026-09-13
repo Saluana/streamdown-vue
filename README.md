@@ -536,9 +536,26 @@ registerShikiLanguages([
 
 The default (non-core) entry automatically registers the curated set listed below. If you only ever highlight a smaller subset, switch to the core entry, register those languages, and your bundler will never even see the unused grammars.
 
+#### Lazy languages (load a grammar on its first fence)
+
+Registered grammars are loaded when the highlighter is created — every loader runs at once, before the first code block renders. For a wide language list that means dozens of grammar chunks (megabytes raw) on the first fence, even if the conversation only ever contains one language. Mark a language `lazy: true` and its loader runs the first time a fence with that language shows up (the way `@streamdown/code` in Vercel's streamdown loads grammars): one chunk per language, nothing fetched for languages that never appear. The fence line always arrives before the block body, so the grammar downloads while the code is still streaming.
+
+```ts
+registerShikiLanguages([
+    // Hot languages: loaded with the highlighter, highlighted from the first token.
+    { id: 'typescript', aliases: ['ts'], loader: () => import('@shikijs/langs/typescript') },
+    { id: 'json', loader: () => import('@shikijs/langs/json') },
+    // Long tail: loaded on demand, one chunk per language.
+    { id: 'cpp', aliases: ['c++'], lazy: true, loader: () => import('@shikijs/langs/cpp') },
+    { id: 'ruby', lazy: true, loader: () => import('@shikijs/langs/ruby') },
+]);
+```
+
+A lazy fence renders as a plain `<pre><code>` for the few milliseconds the grammar takes to arrive and is re-highlighted as soon as it lands. `isLazyShikiLanguage(id)` reports how a language was registered; `unregisterShikiLanguage` / `clearRegisteredShikiLanguages` drop the flag together with the loader.
+
 ### 10.4 Preloaded Shiki Languages
 
-The built-in highlighter eagerly loads the grammars you register. The default bundle calls `registerDefaultShikiLanguages()` which wires up the following set:
+The built-in highlighter eagerly loads the grammars you register (unless marked `lazy: true`, see above). The default bundle calls `registerDefaultShikiLanguages()` which wires up the following set:
 
 | Canonical ID | Aliases        | Human-readable language |
 | ------------ | -------------- | ----------------------- |

@@ -21,6 +21,7 @@ export {
     unregisterShikiLanguage,
     excludeShikiLanguages,
     clearRegisteredShikiLanguages,
+    isLazyShikiLanguage,
     type ShikiLanguageConfig,
 } from './shiki/registry';
 export { registerDefaultShikiLanguages } from './shiki/register-default-languages';

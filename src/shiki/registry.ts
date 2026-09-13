@@ -5,10 +5,21 @@ export type ShikiLanguageConfig = {
     id: string;
     loader: LanguageInput;
     aliases?: string[];
+    /**
+     * Load this grammar on demand instead of at highlighter creation.
+     *
+     * Lazy grammars are excluded from the initial `createHighlighterCore` call and
+     * are loaded by `CodeBlock` (via `loadRegisteredShikiLanguage`) the first time a
+     * fence with this language shows up — one chunk per language, nothing is fetched
+     * for languages that never appear. Pair it with a dynamic-import loader:
+     * `{ id: 'cpp', lazy: true, loader: () => import('@shikijs/langs/cpp') }`.
+     */
+    lazy?: boolean;
 };
 
 const registry = new Map<string, LanguageInput>();
 const aliasToCanonical = new Map<string, string>();
+const lazyIds = new Set<string>();
 
 const rememberAlias = (alias: string, canonical: string) => {
     const normalized = canonicalize(alias);
@@ -37,6 +48,11 @@ export function registerShikiLanguage(config: ShikiLanguageConfig): void {
     const canonicalId = canonicalize(config.id);
     if (!canonicalId) return;
     registry.set(canonicalId, config.loader);
+    if (config.lazy) {
+        lazyIds.add(canonicalId);
+    } else {
+        lazyIds.delete(canonicalId);
+    }
     rememberAlias(canonicalId, canonicalId);
     (config.aliases ?? []).forEach((alias) => rememberAlias(alias, canonicalId));
 }
@@ -55,6 +71,7 @@ export function unregisterShikiLanguage(id: string): void {
         return;
     }
     registry.delete(canonical);
+    lazyIds.delete(canonical);
     removeAliasesFor(canonical);
 }
 
@@ -98,7 +115,14 @@ export function hasRegisteredLanguages(): boolean {
     return registry.size > 0;
 }
 
+/** `true` when the language (canonical id or alias) was registered with `lazy: true`. */
+export function isLazyShikiLanguage(id: string): boolean {
+    const canonical = ensureCanonical(id);
+    return canonical ? lazyIds.has(canonical) : false;
+}
+
 export function clearRegisteredShikiLanguages(): void {
     registry.clear();
     aliasToCanonical.clear();
+    lazyIds.clear();
 }

@@ -10,6 +10,7 @@ import githubDark from '@shikijs/themes/github-dark';
 import {
     getRegisteredLanguageIds,
     hasRegisteredLanguages,
+    isLazyShikiLanguage,
     resolveLanguageInputs,
 } from './shiki/registry';
 import { isRemoteLanguageLoader } from './shiki/cdn';
@@ -36,7 +37,7 @@ const prepareLanguageInputs = (): LanguageInput[] => {
     }
 
     const ids = getRegisteredLanguageIds();
-    const { inputs, missing } = resolveLanguageInputs(ids);
+    const { inputs, missing, resolved } = resolveLanguageInputs(ids);
 
     if (missing.length) {
         console.warn(
@@ -46,7 +47,13 @@ const prepareLanguageInputs = (): LanguageInput[] => {
         );
     }
 
-    return inputs.filter((input) => !isRemoteLanguageLoader(input));
+    // Remote (CDN) and `lazy: true` grammars are loaded on first use by CodeBlock
+    // through loadRegisteredShikiLanguage instead of at highlighter creation.
+    return inputs.filter(
+        (input, index) =>
+            !isRemoteLanguageLoader(input) &&
+            !isLazyShikiLanguage(resolved[index]!)
+    );
 };
 
 export function __resetHighlighterForTests(): void {
