@@ -1,6 +1,6 @@
 {
     "name": "streamdown-vue",
-    "version": "1.0.32",
+    "version": "1.0.33",
     "description": "Streamdown-style streaming Markdown renderer for Vue 3/Nuxt 3 with Shiki, KaTeX, Mermaid, and secure streaming helpers.",
     "type": "module",
     "main": "dist/index.cjs",
@@ -22,6 +22,8 @@
     "scripts": {
         "dev": "vite examples/basic --config vite.config.ts",
         "dev:hydration": "vite examples/hydration --config vite.config.ts",
+        "dev:performance": "vite examples/performance --config vite.config.ts --host 127.0.0.1",
+        "profile:cache": "node scripts/profile-parse-cache.mjs",
         "build": "bun run clean && bun run build:types && bun run build:vite && bun run build:css",
         "build:vite": "vite build",
         "build:css": "node build-css.mjs",
@@ -90,6 +92,7 @@
         "@vue/test-utils": "^2.5.0",
         "bun-types": "^1.4.2",
         "lightningcss": "^1.33.0",
+        "playwright": "1.61.1",
         "typescript": "^6.0.2",
         "vite": "^8.2.2",
         "vite-bundle-visualizer": "^1.2.1",

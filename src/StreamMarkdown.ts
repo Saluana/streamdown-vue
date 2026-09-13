@@ -1,4 +1,4 @@
-import { defineComponent, h } from 'vue';
+import { defineComponent, h, onBeforeUnmount } from 'vue';
 import type { PropType } from 'vue';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
@@ -75,6 +75,8 @@ export const StreamMarkdown = defineComponent({
                 return resolved === remarkMath;
             }
         );
+        const processorHasCustomPlugins =
+            props.remarkPlugins.length > 0 || props.rehypePlugins.length > 0;
 
         const processor = unified()
             .use(ensurePlugin(remarkParse))
@@ -156,7 +158,12 @@ export const StreamMarkdown = defineComponent({
             if (node.type === 'text') return (node as Text).value;
             if (node.type !== 'element') return null;
             const el = node as Element;
-            const nodeProps: any = { ...(el.properties || {}) };
+            const nodeProps: any = Object.fromEntries(
+                Object.entries(el.properties || {}).map(([key, value]) => [
+                    key,
+                    Array.isArray(value) ? [...value] : value,
+                ])
+            );
             const children = renderChildren(el.children || [], el.tagName);
             const tag = el.tagName;
 
@@ -220,6 +227,38 @@ export const StreamMarkdown = defineComponent({
             }
             return createVNode(tag, nodeProps, children);
         };
+
+        // --- Per-instance parsed-block cache (internal) ---
+        // Retains the previous effective source and the HAST roots of completed
+        // blocks so unchanged blocks can skip Unified/KaTeX work on append-only
+        // updates. Cached trees are read-only: renderChildren still runs on every
+        // render and creates fresh VNodes with current props/security settings.
+        type CachedBlock = { input: string; tree: Root };
+        const parseCache: {
+            source: string | null;
+            parseIncomplete: boolean;
+            records: CachedBlock[];
+        } = {
+            source: null,
+            parseIncomplete: true,
+            records: [],
+        };
+
+        // Link reference definitions (including footnotes) are document-global and
+        // can reinterpret earlier blocks, so any definition-like line disables
+        // reuse for the whole document. The pattern is intentionally over-broad:
+        // false positives only lose the fast path.
+        const referenceDefinitionPattern =
+            /(?:^|\n)[ \t]*(?:>[ \t]*|[-+*][ \t]+|\d{1,9}[.)][ \t]+)*\[[^\]\n]+\]:/;
+
+        const isWhitespaceBlock = (block: string) => block.trim().length === 0;
+
+        // Release the current document's parsed trees as soon as the component
+        // unmounts. The cache never holds prior documents or other instances.
+        onBeforeUnmount(() => {
+            parseCache.records.length = 0;
+            parseCache.source = null;
+        });
 
         return () => {
             let markdownSrc = props.content;
@@ -296,6 +335,18 @@ export const StreamMarkdown = defineComponent({
                 return out;
             };
 
+            // Decide whether this render may reuse cached completed blocks.
+            const referencesPresent =
+                referenceDefinitionPattern.test(markdownSrc);
+            const appendOnly =
+                parseCache.source !== null &&
+                markdownSrc.startsWith(parseCache.source);
+            const sameMode =
+                parseCache.parseIncomplete === props.parseIncompleteMarkdown;
+            const cacheEligible =
+                !processorHasCustomPlugins && !referencesPresent;
+            const canReuse = cacheEligible && appendOnly && sameMode;
+
             // Apply preprocessing to full doc
             const preprocessedFull = applyLatexPreprocessing(markdownSrc);
 
@@ -366,11 +417,64 @@ export const StreamMarkdown = defineComponent({
                         ? parseIncompleteMarkdown(b.trimEnd())
                         : b
                 );
-            // (debug logging removed)
-            let vnodes = blocks.flatMap((block) => {
-                const tree = processor.runSync(processor.parse(block)) as Root;
-                return renderChildren(tree.children as any[]);
-            });
+
+            // The last non-whitespace block is still growing; it is never reused
+            // even when synthetic repairs make it look closed.
+            let lastMeaningfulIndex = -1;
+            for (let i = blocks.length - 1; i >= 0; i--) {
+                if (!isWhitespaceBlock(blocks[i]!)) {
+                    lastMeaningfulIndex = i;
+                    break;
+                }
+            }
+
+            // Reuse is decided here, at the final prepared-input/processor
+            // boundary, and only for an unbroken prefix of records whose exact
+            // parser input still matches. Any earlier or uncertain change stops
+            // reuse from that position onward (full reparse). The last
+            // non-whitespace block is always reparsed even when synthetic repairs
+            // make it look closed.
+            //
+            // Assumptions future changes must preserve:
+            // - preprocessing, block splitting/merging, and per-block repair stay
+            //   authoritative; the cache is a pure function of their output;
+            // - the processor is stateless across blocks (custom remark/rehype
+            //   plugins bypass the cache entirely);
+            // - cached HAST is never mutated; renderChildren only reads it.
+            // Rerun the differential tests in __tests__/parse-cache.test.ts and
+            // the browser profiles after changing any of these stages.
+            let reuseCount = 0;
+            if (canReuse) {
+                const limit = Math.min(
+                    parseCache.records.length,
+                    blocks.length
+                );
+                while (
+                    reuseCount < limit &&
+                    reuseCount < lastMeaningfulIndex &&
+                    parseCache.records[reuseCount]!.input === blocks[reuseCount]
+                ) {
+                    reuseCount++;
+                }
+            }
+
+            const nextRecords: CachedBlock[] = [];
+            const vnodes: any[] = [];
+            for (let i = 0; i < blocks.length; i++) {
+                const input = blocks[i]!;
+                if (i < reuseCount) {
+                    const record = parseCache.records[i]!;
+                    if (cacheEligible) nextRecords.push(record);
+                    vnodes.push(...renderChildren(record.tree.children as any[]));
+                    continue;
+                }
+                const tree = processor.runSync(processor.parse(input)) as Root;
+                if (cacheEligible) nextRecords.push({ input, tree });
+                vnodes.push(...renderChildren(tree.children as any[]));
+            }
+            parseCache.records = cacheEligible ? nextRecords : [];
+            parseCache.source = markdownSrc;
+            parseCache.parseIncomplete = props.parseIncompleteMarkdown;
 
             // Append partial open fence code block if present
             if (openFenceInfo) {

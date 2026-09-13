@@ -770,7 +770,17 @@ Usage inside a stream loop (see Tutorial above). Both exported from package root
 -   If highlighting is heavy for enormous fences, lazy-replace code block component after final chunk.
 -   Use server-side rendering for initial payload to reduce Total Blocking Time.
 
-Benchmarks (see `docs/performance.md`) show ~56ms render of the complex fixture under Bun (subject to change).
+Benchmarks and the reproducible Chromium streaming profile are documented in `docs/performance.md`. Run the browser profile with `bun run profile:cache`.
+
+### Streaming parse cache (automatic)
+
+`<StreamMarkdown>` keeps a small per-instance cache so append-only streaming updates do not re-run Unified/remark/rehype/KaTeX for completed blocks whose final parser input is unchanged. The cache is internal: there is no new prop, and the component still creates fresh VNodes (with current hardening, themes, code controls, and custom components) on every render.
+
+-   The last non-whitespace block is always reparsed; a block is only reused after a real following boundary exists.
+-   Reuse stops at the first changed or uncertain block; the rest of the document reparses normally.
+-   The cache is bypassed for the whole document when it contains link reference definitions or footnotes (later definitions can reinterpret earlier blocks), when any custom `remarkPlugins`/`rehypePlugins` are present, after non-append edits or truncation, and when `parseIncompleteMarkdown` changes.
+-   Only the current document's parsed trees are retained, and they are released on reset and unmount. Cached trees are treated as read-only.
+-   Cached and bypassed rendering are compared at every chunk in `__tests__/parse-cache.test.ts`; keep them green when changing preprocessing, block splitting/merging, or the processor pipeline.
 
 ---
 
