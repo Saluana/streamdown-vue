@@ -55,6 +55,23 @@ describe('CodeBlock feature matrix', () => {
         expect(html).toMatch(/<code[^>]*data-streamdown="code"/);
     });
 
+    it('escapes raw HTML in the plaintext fallback', async () => {
+        const dangerous =
+            '<img src=x onerror="alert(1)"> & <script>alert(1)</script>';
+        const html = await renderMD(
+            '```unknown-language\n' + dangerous + '\n```'
+        );
+
+        expect(html).toContain(
+            '&lt;img src=x onerror=&quot;alert(1)&quot;&gt;'
+        );
+        expect(html).toContain(
+            '&amp; &lt;script&gt;alert(1)&lt;/script&gt;'
+        );
+        expect(html).not.toContain('<img src=x');
+        expect(html).not.toContain('<script>alert(1)</script>');
+    });
+
     it('respects selectable=false (adds select-none to pre)', async () => {
         const html = await renderMD(md, { codeBlockSelectable: false });
         expect(html).toMatch(/<pre[^>]*select-none/);
