@@ -32,3 +32,6 @@ jobs:
 
       - name: Test
         run: bun run test:run
+
+      - name: Package consumer smoke test
+        run: bun run test:package

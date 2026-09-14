@@ -22,6 +22,45 @@ import {
 } from './codeblock-context';
 import { provide, inject } from 'vue';
 
+const escapeHtml = (value: string): string =>
+    value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+
+const renderPlainCode = (
+    code: string,
+    language: string,
+    showLineNumbers: boolean,
+    selectable: boolean
+): string => {
+    const escapedLanguage = escapeHtml(language);
+    const langClass = escapedLanguage ? `language-${escapedLanguage}` : '';
+    const preClasses = [langClass];
+    if (!selectable) preClasses.push('select-none');
+
+    const codeInner = showLineNumbers
+        ? code
+              .split(/\r?\n/)
+              .map(
+                  (line, index) =>
+                      `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${
+                          index + 1
+                      }</span>${escapeHtml(line)}</span>`
+              )
+              .join('\n')
+        : escapeHtml(code);
+
+    const preClassAttr = preClasses.filter(Boolean).length
+        ? ` class="${preClasses.join(' ')}"`
+        : '';
+    const codeClassAttr = langClass ? ` class="${langClass}"` : '';
+
+    return `<pre data-streamdown="pre"${preClassAttr}><code data-streamdown="code"${codeClassAttr}>${codeInner}</code></pre>`;
+};
+
 export default defineComponent({
     name: 'CodeBlock',
     props: {
@@ -40,7 +79,16 @@ export default defineComponent({
         hideDownload: { type: Boolean, default: false },
     },
     setup(props, { attrs, slots }) {
-        const html = ref('');
+        // Keep code visible immediately on both SSR and client-only mounts. Lazy
+        // grammars can then replace this escaped plaintext once their chunk loads.
+        const html = ref(
+            renderPlainCode(
+                props.code,
+                props.language,
+                props.showLineNumbers,
+                props.selectable
+            )
+        );
         // Provide code & language for nested buttons
         provide(CODE_BLOCK_META_KEY, {
             get code() {
@@ -55,39 +103,6 @@ export default defineComponent({
         let render: () => Promise<void> = async () => {};
         // token to avoid race condition when rapid streaming updates trigger overlapping async renders
         let renderToken = 0;
-
-        // SSR fallback: immediately render plain <pre><code> so code is visible before hydration.
-        if (typeof window === 'undefined') {
-            const esc = (s: string) =>
-                s
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
-            const langClass = props.language
-                ? `language-${props.language}`
-                : '';
-            const basePreClasses = [langClass];
-            if (!props.selectable) basePreClasses.push('select-none');
-            let codeInner: string;
-            if (props.showLineNumbers) {
-                const lines = props.code.split(/\r?\n/);
-                codeInner = lines
-                    .map(
-                        (ln, i) =>
-                            `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${
-                                i + 1
-                            }</span>${esc(ln)}</span>`
-                    )
-                    .join('\n');
-            } else {
-                codeInner = esc(props.code);
-            }
-            const preClassAttr = basePreClasses.filter(Boolean).length
-                ? ` class="${basePreClasses.join(' ')}"`
-                : '';
-            const codeClassAttr = langClass ? ` class="${langClass}"` : '';
-            html.value = `<pre data-streamdown="pre"${preClassAttr}><code data-streamdown="code"${codeClassAttr}>${codeInner}</code></pre>`;
-        }
 
         const stripPreBackground = (s: string): string => {
             // remove inline background declarations from <pre style="..."> attributes
@@ -202,6 +217,20 @@ export default defineComponent({
                 const lang = props.language || 'txt';
                 let out = '';
 
+                // Keep the current code visible while a missing/lazy grammar loads.
+                if (
+                    lang &&
+                    !highlighter.getLoadedLanguages().includes(lang) &&
+                    currentToken === renderToken
+                ) {
+                    html.value = renderPlainCode(
+                        props.code,
+                        props.language,
+                        props.showLineNumbers,
+                        props.selectable
+                    );
+                }
+
                 try {
                     out = generateHtml(
                         props.code,
@@ -234,8 +263,13 @@ export default defineComponent({
                 }
             } catch {
                 if (currentToken === renderToken) {
-                    html.value = processOutput(
-                        `<pre><code>${props.code}</code></pre>`
+                    // Never put unescaped code into innerHTML when highlighting or
+                    // a lazy grammar load fails.
+                    html.value = renderPlainCode(
+                        props.code,
+                        props.language,
+                        props.showLineNumbers,
+                        props.selectable
                     );
                 }
             }
@@ -253,9 +287,9 @@ export default defineComponent({
             render = doHighlight;
             render();
 
-            // Only setup media query listener for single theme mode
-            // Dual themes handle switching via CSS variables automatically
-            if (!isDualTheme) {
+            // Only setup media query listener for single theme mode.
+            // Guard window so non-DOM renderers can exercise the mounted path.
+            if (!isDualTheme && typeof window !== 'undefined') {
                 media = window.matchMedia('(prefers-color-scheme: dark)');
                 media.addEventListener('change', render);
             }
