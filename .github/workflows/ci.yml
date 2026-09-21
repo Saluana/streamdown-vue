@@ -2,9 +2,7 @@ name: CI
 
 on:
   push:
-    branches:
-      - main
-      - chore/dependency-upgrades-2026-09-21
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -44,7 +42,7 @@ jobs:
         run: bun run test:package
 
       - name: Commit refreshed lockfile
-        if: github.event_name == 'push' && github.ref_name == 'chore/dependency-upgrades-2026-09-21' && github.actor != 'github-actions[bot]'
+        if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]'
         run: |
           if git diff --quiet -- bun.lock; then
             echo "bun.lock unchanged"
@@ -54,4 +52,4 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add bun.lock
           git commit -m "chore: regenerate bun lockfile"
-          git push
+          git push origin HEAD:${{ github.head_ref }}
