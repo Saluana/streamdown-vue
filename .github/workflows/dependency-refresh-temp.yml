@@ -1,0 +1,51 @@
+name: Dependency refresh temporary
+
+on:
+  push:
+    branches:
+      - chore/dependency-upgrades-2026-09-21
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    if: github.event.head_commit.message == 'chore: refresh stable dependencies'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+        with:
+          ref: chore/dependency-upgrades-2026-09-21
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install and refresh lockfile
+        run: bun install
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Build
+        run: bun run build
+
+      - name: Test
+        run: bun run test:run
+
+      - name: Package consumer smoke test
+        run: bun run test:package
+
+      - name: Commit regenerated lockfile
+        run: |
+          if git diff --quiet -- bun.lock; then
+            echo "bun.lock unchanged"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bun.lock
+          git commit -m "chore: regenerate bun lockfile"
+          git push
