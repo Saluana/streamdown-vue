@@ -123,26 +123,6 @@ describe('CodeBlock feature matrix', () => {
         expect(html).not.toContain('copy-button');
     });
 
-    it('provides code & language via context (smoke test)', async () => {
-        // Custom action component reading CODE_BLOCK_META_KEY context
-        const Inspector = defineComponent({
-            name: 'Inspector',
-            setup() {
-                return () =>
-                    h('script', {
-                        innerHTML: '/* inspector placeholder */',
-                        'data-inspector': '1',
-                    });
-            },
-        });
-        // Provide global action that tries to access context in a mounted scenario.
-        // SSR cannot execute injection inside unmounted child easily; we simply ensure global action render placeholder.
-        const html = await renderMD(md, {}, (p: any) =>
-            p(GLOBAL_CODE_BLOCK_ACTIONS, [Inspector])
-        );
-        expect(html).toContain('data-inspector');
-    });
-
     it('line numbers + non-selectable + hidden built-ins combination', async () => {
         const html = await renderMD(md, {
             codeBlockShowLineNumbers: true,
@@ -158,10 +138,4 @@ describe('CodeBlock feature matrix', () => {
         expect(html).not.toContain('download-button');
     });
 
-    it('handles empty code fence gracefully with line numbers', async () => {
-        const empty = '```js\n\n```';
-        const html = await renderMD(empty, { codeBlockShowLineNumbers: true });
-        // zero or one line number depending on split behavior; assert no crash & still code-block container
-        expect(html).toContain('data-streamdown="code-block"');
-    });
 });

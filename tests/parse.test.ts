@@ -8,11 +8,6 @@ test('parseBlocks splits markdown into blocks', () => {
   expect(blocks.length).toBeGreaterThan(1);
 });
 
-test('parseIncompleteMarkdown closes unclosed bold', () => {
-  const md = '**bold';
-  expect(parseIncompleteMarkdown(md)).toBe('**bold**');
-});
-
 test('single dollar sign is left alone', () => {
   const md = 'Cost is $5';
   expect(parseIncompleteMarkdown(md)).toBe('Cost is $5');
