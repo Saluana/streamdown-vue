@@ -356,6 +356,13 @@ const progressiveFixtures: Record<string, string[]> = {
         '```js\nconst partial = 1;\n```\n\n',
         'Final paragraph.',
     ],
+    mathBesideCode: [
+        'Literal `\\[inl',
+        'ine\\]` and `` \\[double`tick\\] ``.\n\n    \\[indented\\]\n\n~~~text\n\\[fen',
+        'ced\\]\n~~~\n\nNeighbor `\\[n\\]` then \\[x + ',
+        '1\\].\n\n```latex\n\\begin{matrix}1 & 2\n3 & 4\\end{matrix}',
+        '\n```\n\n\\[ a^2 + b^2 = c^2 \\]',
+    ],
 };
 
 describe('parse cache differential output', () => {
@@ -608,6 +615,27 @@ describe('parse cache reuse accounting', () => {
                 'First paragraph\n\nSecond paragraph\n\nThird paragraph extended',
             ]);
             expect(runCalls).toBe(6);
+        } finally {
+            harness.app.unmount();
+        }
+    });
+
+    it('parses for code ranges only when LaTeX preprocessing can apply', async () => {
+        const harness = mountInstances([cachedSpec()]);
+        try {
+            parseCalls = 0;
+            runCalls = 0;
+            await harness.setContents([
+                'Plain `code` paragraph.\n\n```ts\nconst a = 1;',
+            ]);
+            expect(parseCalls).toBe(runCalls);
+            parseCalls = 0;
+            runCalls = 0;
+            // One range parse per render, even with an open fence.
+            await harness.setContents([
+                'Math \\[ x \\] beside `\\[code\\]`.\n\n```ts\nconst a = 1;',
+            ]);
+            expect(parseCalls).toBe(runCalls + 1);
         } finally {
             harness.app.unmount();
         }

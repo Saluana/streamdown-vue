@@ -729,6 +729,7 @@ You can override it via `components` if you need advanced theming.
 Supported by default:
 
 -   Display math: `$$ ... $$`
+-   Display math: `\[ ... \]` (normalized to `$$` blocks). LaTeX inside inline code, indented code, and fenced code stays exactly as written.
 -   (If you add them) Inline math via `\( ... \)` or by providing your own `remark-math` with single‑dollar enabled.
 
 ### 12.2 Opting into single‑dollar inline math

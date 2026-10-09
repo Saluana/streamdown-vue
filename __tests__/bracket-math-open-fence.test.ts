@@ -45,4 +45,27 @@ describe('bracket math survives after progressive code fence opens', () => {
         // Sanity: code block is present as progressive open fence (no closing fence yet)
         expect(lastHtml).toContain('data-streamdown="code-block"');
     });
+
+    it('keeps prefix code literal at every prefix while a fence is open', async () => {
+        const doc =
+            'Use `\\[inline\\]` for brackets.\n\n\\[ m = 1 \\]\n\n```text\n\\[still code\\]\n';
+        const fenceStart = doc.indexOf('```');
+        for (let end = 1; end <= doc.length; end++) {
+            const html = await renderToString(
+                h(StreamMarkdown, { content: doc.slice(0, end) })
+            );
+            expect(html).not.toMatch(
+                /(<annotation[^>]*>|class="katex-error"[^>]*>)[^<]*(inline|still)/
+            );
+            if (end >= doc.indexOf('`', 5) + 1) {
+                expect(html).toContain('>\\[inline\\]</code>');
+            }
+            if (end > fenceStart + 3) {
+                expect(html).toContain('data-open-fence="true"');
+                expect((html.match(/katex-display/g) || []).length).toBe(1);
+            }
+        }
+        const html = await renderToString(h(StreamMarkdown, { content: doc }));
+        expect(html).toContain('>\\[still code\\]\n</code></pre>');
+    }, 30000);
 });

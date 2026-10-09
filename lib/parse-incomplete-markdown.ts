@@ -4,10 +4,13 @@ const italicPattern = /(__)([^_]*?)$/;
 const boldItalicPattern = /(\*\*\*)([^*]*?)$/;
 const singleAsteriskPattern = /(\*)([^*]*?)$/;
 const singleUnderscorePattern = /(_)([^_]*?)$/;
-const inlineCodePattern = /(`)([^`]*?)$/;
 const strikethroughPattern = /(~~)([^~]*?)$/;
 // Removed inlineKatexPattern - no longer processing single dollar signs
 const blockKatexPattern = /(\$\$)([^$]*?)$/;
+
+// The handlers below mask the same text in turn, so reuse the last result.
+let lastMaskInput: string | null = null;
+let lastMaskOutput = '';
 
 // Replaces every character inside a fenced code block or an inline code span
 // with a space (newlines are kept so line-based checks keep working). Counting
@@ -16,6 +19,7 @@ const blockKatexPattern = /(\$\$)([^$]*?)$/;
 // emphasis. An unterminated code region masks the rest of the text, since anything
 // after the opening delimiter is code until it is closed.
 const maskCodeRegions = (text: string): string => {
+    if (text === lastMaskInput) return lastMaskOutput;
     const chars = text.split('');
     const maskRange = (start: number, end: number) => {
         for (let i = start; i < end; i++) {
@@ -37,7 +41,11 @@ const maskCodeRegions = (text: string): string => {
             runEnd++;
         }
         const runLength = runEnd - index;
-        const atLineStart = /(?:^|\n)[ \t]*$/.test(text.slice(0, index));
+        let lineStart = index;
+        while (text[lineStart - 1] === ' ' || text[lineStart - 1] === '\t') {
+            lineStart--;
+        }
+        const atLineStart = lineStart === 0 || text[lineStart - 1] === '\n';
 
         // A run of three or more backticks at the start of a line opens a
         // fenced block that runs until a closing fence of at least that length.
@@ -81,17 +89,21 @@ const maskCodeRegions = (text: string): string => {
         index = end;
     }
 
-    return chars.join('');
+    lastMaskInput = text;
+    lastMaskOutput = chars.join('');
+    return lastMaskOutput;
 };
 
 // Handles incomplete links and images by removing them if not closed
+// Brackets inside code are literal, so they are matched on masked text
 const handleIncompleteLinksAndImages = (text: string): string => {
-    const linkMatch = text.match(linkImagePattern);
+    const masked = maskCodeRegions(text);
+    const linkMatch = masked.match(linkImagePattern);
 
     if (linkMatch) {
         const group = linkMatch[1];
         if (group) {
-            const startIndex = text.lastIndexOf(group);
+            const startIndex = masked.lastIndexOf(group);
             if (startIndex >= 0) {
                 return text.substring(0, startIndex);
             }
@@ -133,42 +145,33 @@ const handleIncompleteDoubleUnderscoreItalic = (text: string): string => {
 
 // Counts single asterisks that are not part of double asterisks, not escaped, and not list markers
 const countSingleAsterisks = (text: string): number => {
-    return text.split('').reduce((acc, char, index) => {
+    let count = 0;
+    let lineHasContent = false;
+    for (let index = 0; index < text.length; index++) {
+        const char = text[index]!;
+        if (char === '\n') {
+            lineHasContent = false;
+            continue;
+        }
         if (char === '*') {
             const prevChar = text[index - 1];
             const nextChar = text[index + 1];
-            // Skip if escaped with backslash
-            if (prevChar === '\\') {
-                return acc;
-            }
-            // Check if this is a list marker (asterisk at start of line followed by space)
-            // Look backwards to find the start of the current line
-            let lineStartIndex = index;
-            for (let i = index - 1; i >= 0; i--) {
-                if (text[i] === '\n') {
-                    lineStartIndex = i + 1;
-                    break;
-                }
-                if (i === 0) {
-                    lineStartIndex = 0;
-                    break;
-                }
-            }
-            // Check if this asterisk is at the beginning of a line (with optional whitespace)
-            const beforeAsterisk = text.substring(lineStartIndex, index);
+            // An asterisk after only whitespace on its line and followed by
+            // a space or tab is a list marker.
+            const listMarker =
+                !lineHasContent && (nextChar === ' ' || nextChar === '\t');
             if (
-                beforeAsterisk.trim() === '' &&
-                (nextChar === ' ' || nextChar === '\t')
+                prevChar !== '\\' &&
+                !listMarker &&
+                prevChar !== '*' &&
+                nextChar !== '*'
             ) {
-                // This is likely a list marker, don't count it
-                return acc;
-            }
-            if (prevChar !== '*' && nextChar !== '*') {
-                return acc + 1;
+                count++;
             }
         }
-        return acc;
-    }, 0);
+        if (!lineHasContent && char.trim() !== '') lineHasContent = true;
+    }
+    return count;
 };
 
 // Completes incomplete italic formatting with single asterisks (*)
@@ -186,20 +189,21 @@ const handleIncompleteSingleAsteriskItalic = (text: string): string => {
     return text;
 };
 
-// Check if a position is within a math block (between $ or $$)
-const isWithinMathBlock = (text: string, position: number): boolean => {
-    // Count dollar signs before this position
+// Counts single underscores that are not part of double underscores, not escaped, and not in math blocks
+// (between $ or $$). Math state is tracked in the same pass instead of rescanning per underscore.
+const countSingleUnderscores = (text: string): number => {
+    let count = 0;
     let inInlineMath = false;
     let inBlockMath = false;
 
-    for (let i = 0; i < text.length && i < position; i++) {
+    for (let i = 0; i < text.length; i++) {
+        const char = text[i];
         // Skip escaped dollar signs
-        if (text[i] === '\\' && text[i + 1] === '$') {
-            i++; // Skip the next character
+        if (char === '\\' && text[i + 1] === '$') {
+            i++;
             continue;
         }
-
-        if (text[i] === '$') {
+        if (char === '$') {
             // Check for block math ($$)
             if (text[i + 1] === '$') {
                 inBlockMath = !inBlockMath;
@@ -209,32 +213,17 @@ const isWithinMathBlock = (text: string, position: number): boolean => {
                 // Only toggle inline math if not in block math
                 inInlineMath = !inInlineMath;
             }
+            continue;
+        }
+        if (char !== '_' || inInlineMath || inBlockMath) continue;
+        const prevChar = text[i - 1];
+        const nextChar = text[i + 1];
+        // Skip if escaped with backslash or part of a double underscore
+        if (prevChar !== '\\' && prevChar !== '_' && nextChar !== '_') {
+            count++;
         }
     }
-
-    return inInlineMath || inBlockMath;
-};
-
-// Counts single underscores that are not part of double underscores, not escaped, and not in math blocks
-const countSingleUnderscores = (text: string): number => {
-    return text.split('').reduce((acc, char, index) => {
-        if (char === '_') {
-            const prevChar = text[index - 1];
-            const nextChar = text[index + 1];
-            // Skip if escaped with backslash
-            if (prevChar === '\\') {
-                return acc;
-            }
-            // Skip if within math block
-            if (isWithinMathBlock(text, index)) {
-                return acc;
-            }
-            if (prevChar !== '_' && nextChar !== '_') {
-                return acc + 1;
-            }
-        }
-        return acc;
-    }, 0);
+    return count;
 };
 
 // Completes incomplete italic formatting with single underscores (_)
@@ -252,24 +241,56 @@ const handleIncompleteSingleUnderscoreItalic = (text: string): string => {
     return text;
 };
 
-// Checks if a backtick at position i is part of a triple backtick sequence
-const isPartOfTripleBacktick = (text: string, i: number): boolean => {
-    const isTripleStart = text.substring(i, i + 3) === '```';
-    const isTripleMiddle = i > 0 && text.substring(i - 1, i + 2) === '```';
-    const isTripleEnd = i > 1 && text.substring(i - 2, i + 1) === '```';
+const fenceLine = /^[ \t]*(?:>[ \t]*)*(`{3,}|~{3,})([^\n]*)$/;
 
-    return isTripleStart || isTripleMiddle || isTripleEnd;
-};
-
-// Counts single backticks that are not part of triple backticks
-const countSingleBackticks = (text: string): number => {
-    let count = 0;
-    for (let i = 0; i < text.length; i++) {
-        if (text[i] === '`' && !isPartOfTripleBacktick(text, i)) {
-            count++;
+// Closes a single-backtick code span left open at the end of the text. Only the
+// last paragraph can still be streaming, so fenced blocks are skipped and spans
+// never reach back across a blank line. A backtick run opens a span only when a
+// run of the same length follows; otherwise it is literal, so `` a`b `` or an
+// unmatched ``quote'' does not hide a later single-backtick span.
+export const closeOpenInlineCode = (text: string): string => {
+    let paragraphStart = 0;
+    let fence = '';
+    for (let lineStart = 0; lineStart <= text.length; ) {
+        let lineEnd = text.indexOf('\n', lineStart);
+        if (lineEnd === -1) lineEnd = text.length;
+        const line = text.slice(lineStart, lineEnd);
+        const match = fenceLine.exec(line);
+        const marker = match?.[1] ?? '';
+        const rest = match?.[2] ?? '';
+        if (fence) {
+            if (
+                marker[0] === fence[0] &&
+                marker.length >= fence.length &&
+                !rest.trim()
+            ) {
+                fence = '';
+                paragraphStart = lineEnd + 1;
+            }
+        } else if (marker && (marker[0] === '~' || !rest.includes('`'))) {
+            fence = marker;
+        } else if (lineEnd < text.length && !line.trim()) {
+            paragraphStart = lineEnd + 1;
         }
+        lineStart = lineEnd + 1;
     }
-    return count;
+    if (fence) return text;
+
+    const runs = (text.slice(paragraphStart).match(/`+/g) ?? []).map(
+        (run) => run.length
+    );
+    // Index of the next run with the same length, or -1.
+    const nextSameLength: number[] = [];
+    const lastByLength = new Map<number, number>();
+    for (let i = runs.length - 1; i >= 0; i--) {
+        nextSameLength[i] = lastByLength.get(runs[i]!) ?? -1;
+        lastByLength.set(runs[i]!, i);
+    }
+    for (let i = 0; i < runs.length; i++) {
+        if (nextSameLength[i] !== -1) i = nextSameLength[i]!;
+        else if (runs[i] === 1) return `${text}\``;
+    }
+    return text;
 };
 
 // Completes incomplete inline code formatting (`)
@@ -311,16 +332,7 @@ const handleIncompleteInlineCode = (text: string): string => {
         }
     }
 
-    const inlineCodeMatch = text.match(inlineCodePattern);
-
-    if (inlineCodeMatch && !insideIncompleteCodeBlock) {
-        const singleBacktickCount = countSingleBackticks(text);
-        if (singleBacktickCount % 2 === 1) {
-            return `${text}` + '`';
-        }
-    }
-
-    return text;
+    return insideIncompleteCodeBlock ? text : closeOpenInlineCode(text);
 };
 
 // Completes incomplete strikethrough formatting (~~)

@@ -16,6 +16,27 @@ const packageJson = JSON.parse(
     readFileSync(path.join(packageRoot, 'package.json'), 'utf8')
 );
 const tempRoot = mkdtempSync(path.join(tmpdir(), 'streamdown-vue-smoke-'));
+// Bracket math beside literal code: only the two prose formulas become math.
+const latexBesideCode = [
+    'Literal examples: `\\[inline\\]` and `` \\[double`tick\\] ``.',
+    '',
+    '    \\[indented\\]',
+    '',
+    '~~~text',
+    '\\[fenced\\]',
+    '~~~',
+    '',
+    'A code example next to math: `\\[neighbor\\]` then \\[x + 1\\].',
+    '',
+    '\\[ a^2 + b^2 = c^2 \\]',
+].join('\n');
+const literalCodeHtml = [
+    '>\\[inline\\]</code>',
+    '>\\[double`tick\\]</code>',
+    '>\\[neighbor\\]</code>',
+    '>\\[indented\\]\n</code></pre>',
+    '>\\[fenced\\]\n</code></pre>',
+];
 const npmEnvironment = {
     ...process.env,
     npm_config_dry_run: 'false',
@@ -91,6 +112,22 @@ const html = await renderToString(
 assert.match(html, /data-streamdown="h1"/);
 assert.match(html, /Packaged consumer/);
 
+const cjsVue = require('vue');
+const cjsServer = require('vue/server-renderer');
+for (const [StreamMarkdown, createApp, render] of [
+    [esm.StreamMarkdown, createSSRApp, renderToString],
+    [cjs.StreamMarkdown, cjsVue.createSSRApp, cjsServer.renderToString],
+]) {
+    const latexHtml = await render(
+        createApp(StreamMarkdown, { content: ${JSON.stringify(latexBesideCode)} })
+    );
+    for (const fragment of ${JSON.stringify(literalCodeHtml)}) {
+        assert(latexHtml.includes(fragment), 'literal code lost: ' + fragment);
+    }
+    assert.equal(latexHtml.match(/katex-display/g)?.length, 2);
+    assert(!latexHtml.includes('katex-error'));
+}
+
 const styleUrl = import.meta.resolve('streamdown-vue/style.css');
 const css = readFileSync(fileURLToPath(styleUrl), 'utf8');
 assert.match(css, /streamdown-vue/);
@@ -101,7 +138,9 @@ assert.match(css, /streamdown-vue/);
         stdio: 'pipe',
     });
 
-    console.log('✓ packed ESM, CommonJS, declarations, CSS, and SSR consumer');
+    console.log(
+        '✓ packed ESM, CommonJS, declarations, CSS, SSR, and literal-code math consumer'
+    );
 } finally {
     rmSync(tempRoot, { recursive: true, force: true });
 }

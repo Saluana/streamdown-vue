@@ -290,3 +290,93 @@ export function normalizeBracketDisplayMath(content: string): string {
     }
     return upgraded.join('\n');
 }
+
+/** The parts of an mdast node needed to locate literal code in the source. */
+interface SourceNode {
+    type: string;
+    position?: { start: { offset?: number }; end: { offset?: number } };
+    children?: SourceNode[];
+}
+
+// The normalizers only rewrite text around these delimiters.
+const latexTrigger = /\\\[|\\begin\{[bpBvV]?matrix\}/;
+// Every code span or block needs a backtick, a tilde fence, or indentation.
+const codeHint = /`|~~~|\t| {4}/;
+
+const normalizeLatex = (content: string): string =>
+    normalizeDisplayMath(normalizeBracketDisplayMath(fixMatrix(content)));
+
+/**
+ * Runs the LaTeX normalizers on Markdown prose only. Code spans and code
+ * blocks located by `parse` keep their exact source, and bracket math or a
+ * matrix environment never pairs across code: an opener that reaches code
+ * before its closer stays literal, so it cannot swallow a later code block.
+ *
+ * `parse` must return an mdast tree with offsets. It may parse a repaired copy
+ * of a streaming prefix (e.g. with a dangling backtick closed); text past the
+ * end of the source is ignored.
+ */
+export function normalizeLatexOutsideCode(
+    source: string,
+    parse: (markdown: string) => SourceNode
+): string {
+    const text = source.replace(/\r\n?/g, '\n');
+    // Without a trigger the normalizers cannot change anything but line
+    // endings, and text that cannot contain code needs no extra parse.
+    if (!latexTrigger.test(text)) return text;
+    if (!codeHint.test(text)) return normalizeLatex(text);
+
+    const ranges: Array<[number, number]> = [];
+    const visit = (node: SourceNode) => {
+        if (node.type === 'code' || node.type === 'inlineCode') {
+            const start = node.position?.start.offset;
+            const end = node.position?.end.offset;
+            if (start !== undefined && end !== undefined) {
+                ranges.push([start, end]);
+            }
+            return;
+        }
+        node.children?.forEach(visit);
+    };
+    visit(parse(text));
+    if (!ranges.length) return normalizeLatex(text);
+
+    // Swap each literal region for an opaque token that is absent from the
+    // source. Tokens contain no delimiter the normalizers react to.
+    let marker = 'STREAMDOWN_CODE_';
+    while (text.includes(marker)) marker += '_';
+    const literals: string[] = [];
+    const tokens = new RegExp(`${marker}(\\d+)_`, 'g');
+    const restore = (content: string) =>
+        content.replace(tokens, (_, index) => literals[Number(index)]!);
+    const protect = (literal: string) =>
+        `${marker}${literals.push(restore(literal)) - 1}_`;
+
+    let masked = '';
+    let cursor = 0;
+    for (const [start, end] of ranges) {
+        masked += text.slice(cursor, start) + protect(text.slice(start, end));
+        cursor = end;
+    }
+    masked += text.slice(cursor);
+
+    // An opener that reaches code before its closer stays literal up to the
+    // code. Bracket openers mirror normalizeBracketDisplayMath: one at line
+    // start may span lines, a mid-line one pairs only on its own line.
+    const matrixBeforeCode = new RegExp(
+        String.raw`\\begin\{[bpBvV]?matrix\}(?:(?!${marker}|\\end\{[bpBvV]?matrix\})[\s\S])*(?=${marker})`,
+        'g'
+    );
+    const bracketBeforeCode = new RegExp(
+        String.raw`(?<=^[^\S\n]*(?:>[^\S\n]*)*)\\\[(?:(?!${marker}|\\\])[\s\S])*(?=${marker})|\\\[(?:(?!${marker}|\\\])[^\n])*(?=${marker})`,
+        'gm'
+    );
+    let out = fixMatrix(masked.replace(matrixBeforeCode, protect));
+    out = normalizeBracketDisplayMath(out.replace(bracketBeforeCode, protect));
+    // `$$` both opens and closes, so a pair containing code is kept whole to
+    // leave the pairing of later blocks unchanged.
+    out = out.replace(/\$\$[\s\S]*?\$\$/g, (pair) =>
+        pair.includes(marker) ? protect(pair) : pair
+    );
+    return restore(normalizeDisplayMath(out));
+}

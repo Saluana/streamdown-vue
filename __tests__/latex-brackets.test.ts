@@ -117,3 +117,136 @@ describe('KaTeX bracket syntax rendering', () => {
         expect(html).toContain('stillStay');
     });
 });
+
+const render = (content: string) =>
+    renderToString(h(StreamMarkdown, { content }));
+const unescapeHtml = (text: string) =>
+    text
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&');
+const inlineCode = (html: string) =>
+    [
+        ...html.matchAll(
+            /<code[^>]*data-streamdown="inline-code"[^>]*>([\s\S]*?)<\/code>/g
+        ),
+    ].map((m) => unescapeHtml(m[1]!));
+const codeBlocks = (html: string) =>
+    [...html.matchAll(/<pre[^>]*><code[^>]*>([\s\S]*?)<\/code><\/pre>/g)].map(
+        (m) => unescapeHtml(m[1]!)
+    );
+// TeX sources of rendered math, including math KaTeX failed to parse.
+const texSources = (html: string) =>
+    [
+        ...html.matchAll(
+            /<annotation encoding="application\/x-tex">([\s\S]*?)<\/annotation>|<span class="katex-error"[^>]*>([\s\S]*?)<\/span>/g
+        ),
+    ].map((m) => unescapeHtml(m[1] ?? m[2]!).trim());
+
+describe('bracket math next to literal Markdown code', () => {
+    const reproduction = [
+        'Literal examples: `\\[inline\\]` and `` \\[double`tick\\] ``.',
+        '',
+        '    \\[indented\\]',
+        '',
+        '~~~text',
+        '\\[fenced\\]',
+        '~~~',
+        '',
+        'A code example next to math: `\\[neighbor\\]` then \\[x + 1\\].',
+        '',
+        '\\[ a^2 + b^2 = c^2 \\]',
+    ].join('\n');
+
+    it('keeps every code example literal and renders only prose formulas', async () => {
+        const html = await render(reproduction);
+        expect(inlineCode(html)).toEqual([
+            '\\[inline\\]',
+            '\\[double`tick\\]',
+            '\\[neighbor\\]',
+        ]);
+        expect(codeBlocks(html)).toEqual(['\\[indented\\]\n', '\\[fenced\\]\n']);
+        expect(texSources(html)).toEqual(['x + 1', 'a^2 + b^2 = c^2']);
+        expect((html.match(/katex-display/g) || []).length).toBe(2);
+        expect(html).not.toContain('katex-error');
+    });
+
+    it('keeps code literal inside blockquotes, lists, and multi-line spans', async () => {
+        const html = await render(
+            [
+                '> Quote with `\\[quoted\\]` and math:',
+                '> \\[ q = 1 \\]',
+                '>',
+                '>     \\[quoted indented\\]',
+                '',
+                '- Item with `\\[listed\\]`',
+                '',
+                '  ```',
+                '  \\[list fenced\\]',
+                '  ```',
+                '',
+                '      \\[list indented\\]',
+                '',
+                'A span across lines `see',
+                '\\[multi\\]` ends here.',
+                '',
+                '\\[ z = 2 \\]',
+            ].join('\n')
+        );
+        expect(inlineCode(html)).toEqual([
+            '\\[quoted\\]',
+            '\\[listed\\]',
+            'see \\[multi\\]',
+        ]);
+        expect(codeBlocks(html)).toEqual([
+            '\\[quoted indented\\]\n',
+            '\\[list fenced\\]\n',
+            '\\[list indented\\]\n',
+        ]);
+        expect(texSources(html)).toEqual(['q = 1', 'z = 2']);
+        expect(html).toContain('<blockquote');
+    });
+
+    it('never renders a code example as math at any streaming prefix', async () => {
+        // Known gap: an unterminated double-backtick run is not auto-closed
+        // (TeX ``quotes'' in prose would turn into code), so until its closing
+        // run arrives the bracket inside it is still prose.
+        const doubleOpen = reproduction.indexOf('``');
+        const doubleClosed = reproduction.indexOf('``', doubleOpen + 2) + 2;
+        for (let end = 1; end <= reproduction.length; end++) {
+            const html = await render(reproduction.slice(0, end));
+            for (const code of [...inlineCode(html), ...codeBlocks(html)]) {
+                expect(code).not.toContain('$$');
+            }
+            const tex = texSources(html);
+            if (end > doubleOpen && end < doubleClosed) {
+                expect(tex.join()).not.toMatch(/inline|indented|fenced|neighbor/);
+                continue;
+            }
+            for (const source of tex) {
+                expect(source).not.toMatch(/inline|double|tick|indented|fenced|neighbor/);
+            }
+        }
+        const html = await render(reproduction);
+        expect((html.match(/katex-display/g) || []).length).toBe(2);
+    }, 30000);
+
+    it('keeps a streaming code span literal after earlier code-like runs', async () => {
+        for (const before of [
+            '```ts\nconst a = 1;\n```',
+            '```\ncode\n````',
+            "``quote''",
+        ]) {
+            const doc = `${before}\n\nThen \`\\[literal\\]\` and \\[ y \\]`;
+            for (let end = doc.indexOf('Then'); end <= doc.length; end++) {
+                const html = await render(doc.slice(0, end));
+                expect(texSources(html).join()).not.toContain('literal');
+            }
+            const html = await render(doc);
+            expect(inlineCode(html)).toContain('\\[literal\\]');
+            expect(texSources(html)).toEqual(['y']);
+        }
+    });
+});

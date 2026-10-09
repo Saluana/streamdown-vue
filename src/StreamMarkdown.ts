@@ -11,12 +11,11 @@ import CodeBlock from './components/CodeBlock';
 import MermaidBlock from './components/MermaidBlock';
 import defaultComponents, { type ComponentMap } from './components/components';
 import { parseBlocks } from '../lib/parse-blocks';
-import { parseIncompleteMarkdown } from '../lib/parse-incomplete-markdown';
 import {
-    fixMatrix,
-    normalizeBracketDisplayMath,
-    normalizeDisplayMath,
-} from '../lib/latex-utils';
+    closeOpenInlineCode,
+    parseIncompleteMarkdown,
+} from '../lib/parse-incomplete-markdown';
+import { normalizeLatexOutsideCode } from '../lib/latex-utils';
 import {
     hardenHref,
     hardenSrc,
@@ -327,13 +326,18 @@ export const StreamMarkdown = defineComponent({
                 }
             }
 
-            // Light LaTeX preprocessing helpers (matrix row breaks + bracket math normalization + display math normalization)
-            const applyLatexPreprocessing = (raw: string): string => {
-                let out = fixMatrix(raw);
-                out = normalizeBracketDisplayMath(out);
-                out = normalizeDisplayMath(out);
-                return out;
-            };
+            // Light LaTeX preprocessing (matrix row breaks + bracket math + display math)
+            // that leaves Markdown code literal. Code is located with this processor's
+            // parser; when incomplete markdown is repaired, a dangling backtick is closed
+            // first so a streaming code span is protected before its closer arrives.
+            const applyLatexPreprocessing = (raw: string): string =>
+                normalizeLatexOutsideCode(raw, (text) =>
+                    processor.parse(
+                        props.parseIncompleteMarkdown
+                            ? closeOpenInlineCode(text)
+                            : text
+                    )
+                );
 
             // Decide whether this render may reuse cached completed blocks.
             const referencesPresent =
@@ -347,23 +351,14 @@ export const StreamMarkdown = defineComponent({
                 !processorHasCustomPlugins && !referencesPresent;
             const canReuse = cacheEligible && appendOnly && sameMode;
 
-            // Apply preprocessing to full doc
-            const preprocessedFull = applyLatexPreprocessing(markdownSrc);
-
-            // If we have an open fence, we still need to preprocess the prefix region so that
-            // bracket display math (\[ ... \]) and matrices continue to render. Previously the
-            // raw unprocessed prefix was used which caused already rendered KaTeX to "disappear"
-            // as soon as a progressive code fence opened.
-            if (openFenceInfo) {
-                openFenceInfo.prefix = applyLatexPreprocessing(
-                    openFenceInfo.prefix
-                );
-            }
-
-            // Choose correct slice to feed into markdown processor
-            const toProcess = openFenceInfo
-                ? openFenceInfo.prefix
-                : preprocessedFull;
+            // Preprocess only the slice fed to the markdown processor. With an open fence
+            // that is the prefix, which still needs preprocessing so bracket display math
+            // (\[ ... \]) and matrices continue to render. Previously the raw unprocessed
+            // prefix was used which caused already rendered KaTeX to "disappear" as soon
+            // as a progressive code fence opened.
+            const toProcess = applyLatexPreprocessing(
+                openFenceInfo ? openFenceInfo.prefix : markdownSrc
+            );
             const markdown = props.parseIncompleteMarkdown
                 ? parseIncompleteMarkdown(toProcess)
                 : toProcess;

@@ -37,12 +37,12 @@ describe('incomplete streaming / markdown scenarios', () => {
         expect(count(html4, 'return 42;')).toBe(1);
     });
 
-    it('2. complex mixed inline unfinished tokens become balanced while incomplete link removed', () => {
+    it('2. complex mixed inline unfinished tokens become balanced without deleting code', () => {
         const src =
             'Line with *italic start and **bold start plus `code start and an unmatched link [Example';
         const out = parseIncompleteMarkdown(src);
-        // Incomplete link should be stripped (no trailing [Example)
-        expect(out).not.toMatch(/\[Example/);
+        // The bracket is inside the unterminated code span, so it is code, not a link
+        expect(out).toContain('`code start and an unmatched link [Example');
         // Italic single * closed
         expect(count(out, '*')).toBeGreaterThanOrEqual(4); // *italic* + **bold** adds at least 4 asterisks
         // Backtick closed
