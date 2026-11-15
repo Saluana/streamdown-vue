@@ -5,7 +5,6 @@ import {
     onBeforeUnmount,
     ref,
     watch,
-    nextTick,
 } from 'vue';
 import type { PropType } from 'vue';
 import CopyButton from './CopyButton';
@@ -14,7 +13,9 @@ import {
     useShikiHighlighter,
     loadRegisteredShikiLanguage,
 } from '../use-shiki-highlighter';
-import type { ShikiThemeConfig } from '../types';
+import type { ShikiThemeConfig, CodeHighlightInput } from '../types';
+import { createStreamingHighlighter } from '../shiki/streaming';
+import { patchCodeHtml } from './patch-code-html';
 import {
     CODE_BLOCK_META_KEY,
     GLOBAL_CODE_BLOCK_ACTIONS,
@@ -34,7 +35,7 @@ const renderPlainCode = (
     code: string,
     language: string,
     showLineNumbers: boolean,
-    selectable: boolean
+    selectable: boolean,
 ): string => {
     const escapedLanguage = escapeHtml(language);
     const langClass = escapedLanguage ? `language-${escapedLanguage}` : '';
@@ -48,7 +49,7 @@ const renderPlainCode = (
                   (line, index) =>
                       `<span class="line"><span class="code-line-number select-none opacity-60 pr-4 text-xs" data-line-number data-streamdown="code-line-number">${
                           index + 1
-                      }</span>${escapeHtml(line)}</span>`
+                      }</span>${escapeHtml(line)}</span>`,
               )
               .join('\n')
         : escapeHtml(code);
@@ -65,6 +66,12 @@ export default defineComponent({
     name: 'CodeBlock',
     props: {
         code: { type: String, required: true },
+        highlight: {
+            type: Function as PropType<
+                (input: CodeHighlightInput) => Promise<string>
+            >,
+            default: undefined,
+        },
         language: { type: String, default: '' },
         theme: {
             type: [String, Object] as PropType<ShikiThemeConfig>,
@@ -81,13 +88,20 @@ export default defineComponent({
     setup(props, { attrs, slots }) {
         // Keep code visible immediately on both SSR and client-only mounts. Lazy
         // grammars can then replace this escaped plaintext once their chunk loads.
-        const html = ref(
-            renderPlainCode(
-                props.code,
-                props.language,
-                props.showLineNumbers,
-                props.selectable
-            )
+        const initialHtml = renderPlainCode(
+            props.code,
+            props.language,
+            props.showLineNumbers,
+            props.selectable,
+        );
+        const html = ref(initialHtml);
+        const body = ref<HTMLElement | null>(null);
+        watch(
+            html,
+            (value) => {
+                if (body.value) patchCodeHtml(body.value, value);
+            },
+            { flush: 'post' },
         );
         // Provide code & language for nested buttons
         provide(CODE_BLOCK_META_KEY, {
@@ -103,6 +117,24 @@ export default defineComponent({
         let render: () => Promise<void> = async () => {};
         // token to avoid race condition when rapid streaming updates trigger overlapping async renders
         let renderToken = 0;
+        let committedToken = 0;
+        let disposed = false;
+        let contextRevision = 0;
+        let highlighted: { input: CodeHighlightInput; raw: string } | null =
+            null;
+        let incremental:
+            ReturnType<typeof createStreamingHighlighter> | undefined;
+        const currentTheme = (): ShikiThemeConfig => {
+            const theme =
+                props.theme ||
+                (media?.matches ? 'github-dark' : 'github-light');
+            return typeof theme === 'string'
+                ? theme
+                : { light: theme.light, dark: theme.dark };
+        };
+        const sameContext = (input: CodeHighlightInput) =>
+            input.language === (props.language || 'txt') &&
+            JSON.stringify(input.theme) === JSON.stringify(currentTheme());
 
         const stripPreBackground = (s: string): string => {
             // remove inline background declarations from <pre style="..."> attributes
@@ -115,12 +147,12 @@ export default defineComponent({
                             (decl: string) =>
                                 decl &&
                                 !/background(-color)?\s*:/.test(
-                                    decl.toLowerCase()
-                                )
+                                    decl.toLowerCase(),
+                                ),
                         )
                         .join('; ');
                     return `${p1}${cleaned}${p3}`.replace(/style=""/, '');
-                }
+                },
             );
         };
 
@@ -136,12 +168,17 @@ export default defineComponent({
 
         const ensureSelectable = (s: string): string => {
             if (props.selectable) return s;
-            return s.replace('<pre', '<pre class="select-none"');
+            return s.replace(/<pre\b([^>]*)>/, (_match, attrs: string) => {
+                const withClass = /\bclass="/.test(attrs)
+                    ? attrs.replace(/\bclass="/, 'class="select-none ')
+                    : `${attrs} class="select-none"`;
+                return `<pre${withClass}>`;
+            });
         };
 
         const processOutput = (raw: string): string => {
             const base = ensureSelectable(
-                addLineNumbers(stripPreBackground(raw))
+                addLineNumbers(stripPreBackground(raw)),
             );
             return addDataStreamdown(base);
         };
@@ -150,11 +187,11 @@ export default defineComponent({
             // Add data-streamdown to <pre> and <code> inside block output if missing
             const withPre = s.replace(
                 /<pre(?![^>]*data-streamdown=)/g,
-                '<pre data-streamdown="pre"'
+                '<pre data-streamdown="pre"',
             );
             const withCode = withPre.replace(
                 /<code(?![^>]*data-streamdown=)/g,
-                '<code data-streamdown="code"'
+                '<code data-streamdown="code"',
             );
             return withCode;
         };
@@ -187,124 +224,141 @@ export default defineComponent({
             }
         };
 
-        const generateHtml = (
-            code: string,
-            lang: string,
-            theme: ShikiThemeConfig | undefined,
-            highlighter: any
-        ) => {
-            const isDual = typeof theme === 'object' && theme !== null;
-            if (isDual) {
-                return highlighter.codeToHtml(code, {
-                    lang,
-                    themes: { light: theme.light, dark: theme.dark },
-                });
+        const refreshHtml = () => {
+            const snapshot = highlighted;
+            if (
+                snapshot &&
+                sameContext(snapshot.input) &&
+                props.code.startsWith(snapshot.input.code)
+            ) {
+                if (snapshot.input.code === props.code) {
+                    html.value = processOutput(snapshot.raw);
+                    return;
+                }
+                // Keep completed highlighted lines and render the mutable suffix
+                // as escaped text. A slow job must never hide the newest tokens.
+                const parts = snapshot.raw.match(
+                    /^(<pre\b[^>]*><code\b[^>]*>)([\s\S]*)(<\/code><\/pre>)$/,
+                );
+                if (parts) {
+                    const count = (snapshot.input.code.match(/\n/g) || [])
+                        .length;
+                    const boundary = snapshot.input.code.lastIndexOf('\n') + 1;
+                    const prefix = parts[2]!.split('\n').slice(0, count);
+                    const tail = props.code
+                        .slice(boundary)
+                        .split(/\r?\n/)
+                        .map(
+                            (line) =>
+                                `<span class="line">${escapeHtml(line)}</span>`,
+                        );
+                    html.value = processOutput(
+                        parts[1] + [...prefix, ...tail].join('\n') + parts[3],
+                    );
+                    return;
+                }
             }
-            // Fallback to system preference if theme is undefined
-            const singleTheme =
-                (theme as string) ||
-                (media?.matches ? 'github-dark' : 'github-light');
-            return highlighter.codeToHtml(code, {
-                lang,
-                theme: singleTheme,
-            });
+            html.value = renderPlainCode(
+                props.code,
+                props.language,
+                props.showLineNumbers,
+                props.selectable,
+            );
         };
 
         const doHighlight = async () => {
-            const currentToken = ++renderToken;
+            const token = ++renderToken;
+            const revision = contextRevision;
+            const input: CodeHighlightInput = {
+                code: props.code,
+                language: props.language || 'txt',
+                theme: currentTheme(),
+            };
             try {
-                const highlighter = await useShikiHighlighter();
-                const lang = props.language || 'txt';
-                let out = '';
-
-                // Keep the current code visible while a missing/lazy grammar loads.
-                if (
-                    lang &&
-                    !highlighter.getLoadedLanguages().includes(lang) &&
-                    currentToken === renderToken
-                ) {
-                    html.value = renderPlainCode(
-                        props.code,
-                        props.language,
-                        props.showLineNumbers,
-                        props.selectable
-                    );
-                }
-
-                try {
-                    out = generateHtml(
-                        props.code,
-                        lang,
-                        props.theme,
-                        highlighter
-                    );
-                } catch (e) {
-                    // Retry with loaded language
+                let raw: string;
+                if (props.highlight) {
+                    raw = await props.highlight(input);
+                } else {
+                    const highlighter = await useShikiHighlighter();
                     if (
-                        lang &&
-                        !highlighter.getLoadedLanguages().includes(lang)
+                        !highlighter
+                            .getLoadedLanguages()
+                            .includes(input.language)
                     ) {
-                        const loaded = await loadRegisteredShikiLanguage(lang);
-                        if (!loaded) throw new Error('missing lang');
-                        out = generateHtml(
-                            props.code,
-                            lang,
-                            props.theme,
-                            highlighter
-                        );
-                    } else {
-                        throw e;
+                        await loadRegisteredShikiLanguage(input.language);
                     }
+                    incremental ??= createStreamingHighlighter(highlighter);
+                    raw = incremental(input);
                 }
-
-                // Only commit if this is the latest async render
-                if (currentToken === renderToken) {
-                    html.value = processOutput(out);
+                // Appends may overtake this job; a completed prefix is still useful.
+                // Replacements, context changes and teardown must invalidate it.
+                if (
+                    !disposed &&
+                    revision === contextRevision &&
+                    token > committedToken &&
+                    sameContext(input) &&
+                    props.code.startsWith(input.code)
+                ) {
+                    committedToken = token;
+                    highlighted = { input, raw };
+                    refreshHtml();
                 }
             } catch {
-                if (currentToken === renderToken) {
-                    // Never put unescaped code into innerHTML when highlighting or
-                    // a lazy grammar load fails.
-                    html.value = renderPlainCode(
-                        props.code,
-                        props.language,
-                        props.showLineNumbers,
-                        props.selectable
-                    );
-                }
+                if (
+                    !disposed &&
+                    revision === contextRevision &&
+                    token === renderToken
+                )
+                    refreshHtml();
             }
         };
 
         onMounted(() => {
-            const isDualTheme =
-                typeof props.theme === 'object' && props.theme !== null;
-
-            // Inject generic dual-theme CSS if needed.
-            if (isDualTheme) {
-                injectDualThemeStyles();
+            injectDualThemeStyles();
+            if (
+                typeof window !== 'undefined' &&
+                typeof window.matchMedia === 'function'
+            ) {
+                media = window.matchMedia('(prefers-color-scheme: dark)');
+                media.addEventListener('change', doHighlight);
             }
-
             render = doHighlight;
             render();
-
-            // Only setup media query listener for single theme mode.
-            // Guard window so non-DOM renderers can exercise the mounted path.
-            if (!isDualTheme && typeof window !== 'undefined') {
-                media = window.matchMedia('(prefers-color-scheme: dark)');
-                media.addEventListener('change', render);
-            }
         });
 
         // Re-highlight when code / language / theme changes (progressive streaming updates)
         watch(
-            () => [props.code, props.language, props.theme],
-            () => {
-                // Batch with nextTick so rapid successive parent updates collapse
-                nextTick(() => render());
-            }
+            () =>
+                [
+                    props.code,
+                    props.language,
+                    JSON.stringify(props.theme),
+                    props.highlight,
+                ] as const,
+            (next, previous) => {
+                if (
+                    !next[0].startsWith(previous[0]) ||
+                    next
+                        .slice(1)
+                        .some((value, index) => value !== previous[index + 1])
+                ) {
+                    contextRevision++;
+                    highlighted = null;
+                }
+                refreshHtml();
+                render();
+            },
+            { flush: 'post' },
         );
 
+        watch(() => [props.showLineNumbers, props.selectable], refreshHtml, {
+            flush: 'post',
+        });
         onBeforeUnmount(() => {
+            disposed = true;
+            contextRevision++;
+            highlighted = null;
+            incremental = undefined;
             if (media) media.removeEventListener('change', render);
         });
         return () => {
@@ -332,7 +386,7 @@ export default defineComponent({
                                           class: 'px-1 py-0.5 rounded bg-gray-200 dark:bg-gray-700 font-mono text-[10px] leading-none tracking-wide',
                                           'data-streamdown': 'code-lang',
                                       },
-                                      props.language
+                                      props.language,
                                   )
                                 : h('span', {
                                       class: 'h-4',
@@ -351,7 +405,7 @@ export default defineComponent({
                                             key: idx,
                                             code: props.code,
                                             language: props.language,
-                                        })
+                                        }),
                                     ),
                                     // global injected actions
                                     ...globalActions.map((A: any, idx) =>
@@ -359,7 +413,7 @@ export default defineComponent({
                                             key: `g-${idx}`,
                                             code: props.code,
                                             language: props.language,
-                                        })
+                                        }),
                                     ),
                                     // slot based actions (<template #actions>)
                                     ...(slots.actions ? slots.actions() : []),
@@ -376,17 +430,20 @@ export default defineComponent({
                                               'data-streamdown': 'copy-button',
                                           })
                                         : null,
-                                ].filter(Boolean)
+                                ].filter(Boolean),
                             ),
-                        ]
+                        ],
                     ),
                     // Code body
                     h('div', {
-                        innerHTML: html.value,
+                        ref: body,
+                        // Vue owns the initial/SSR content; subsequent code updates
+                        // patch this private subtree without replacing stable lines.
+                        innerHTML: initialHtml,
                         class: 'px-4 py-3 overflow-x-auto',
                         'data-streamdown': 'code-body',
                     }),
-                ]
+                ],
             );
         };
     },

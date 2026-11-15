@@ -1,79 +1,137 @@
-import { defineComponent, h, onMounted, ref } from 'vue';
+import {
+    defineComponent,
+    h,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import CopyButton from './CopyButton';
 
 let initialized = false;
-const cache: Record<string, string> = {};
-const hash = (str: string): string => {
-    let h = 0;
-    for (let i = 0; i < str.length; i++) {
-        h = (h << 5) - h + str.charCodeAt(i);
-        h |= 0;
-    }
-    return Math.abs(h).toString(36);
+let nextId = 0;
+
+// Retain finished diagrams across virtual-row unmounts without retaining chats
+// indefinitely. Each mount gets a fresh namespace for SVG ids and references.
+const cache = new Map<string, string>();
+const MAX_CACHED_DIAGRAMS = 32;
+const scopeSvg = (source: string, prefix: string): string => {
+    const document = new DOMParser().parseFromString(source, 'image/svg+xml');
+    const ids = new Map<string, string>();
+    document.querySelectorAll('[id]').forEach((node, index) => {
+        const id = `${prefix}-${index}`;
+        ids.set(node.id, id);
+        node.id = id;
+    });
+    const pattern = [...ids.keys()]
+        .sort((a, b) => b.length - a.length)
+        .map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+    const references = new RegExp(`#(${pattern})(?![\\w-])`, 'g');
+    const replace = (value: string) =>
+        value.replace(references, (_match, id: string) => `#${ids.get(id)}`);
+    document.querySelectorAll('*').forEach((node) => {
+        for (const attribute of [...node.attributes]) {
+            const value =
+                attribute.name === 'aria-labelledby' ||
+                attribute.name === 'aria-describedby'
+                    ? attribute.value
+                          .split(/\s+/)
+                          .map((id) => ids.get(id) ?? id)
+                          .join(' ')
+                    : replace(attribute.value);
+            if (value !== attribute.value)
+                node.setAttribute(attribute.name, value);
+        }
+        if (node.tagName === 'style')
+            node.textContent = replace(node.textContent ?? '');
+    });
+    return new XMLSerializer().serializeToString(document.documentElement);
 };
 
 export default defineComponent({
     name: 'MermaidBlock',
     props: {
         code: { type: String, required: true },
+        streaming: { type: Boolean, default: false },
     },
     setup(props) {
         const svg = ref('');
-        const lastGood = ref('');
+        const viewId = `streamdown-mermaid-view-${++nextId}`;
         const error = ref('');
-        const loading = ref(true);
-        const id = `streamdown-vue-mermaid-${hash(props.code)}`;
+        let revision = 0;
+        let disposed = false;
 
         const render = async () => {
-            loading.value = true;
+            const token = ++revision;
+            if (props.streaming) {
+                svg.value = '';
+                error.value = '';
+                return;
+            }
+            const code = props.code;
+            const cached = cache.get(code);
+            if (cached) {
+                svg.value = scopeSvg(cached, viewId);
+                error.value = '';
+                return;
+            }
             try {
                 const mermaid = (await import('mermaid')).default;
+                if (disposed || token !== revision) return;
                 if (!initialized) {
                     mermaid.initialize({ startOnLoad: false });
                     initialized = true;
                 }
-                if (cache[id]) {
-                    svg.value = cache[id];
-                    loading.value = false;
-                    return;
-                }
-                const { svg: out } = await mermaid.render(id, props.code);
-                svg.value = out;
-                lastGood.value = out;
-                cache[id] = out;
+                const { svg: output } = await mermaid.render(
+                    `streamdown-mermaid-${++nextId}`,
+                    code
+                );
+                cache.delete(code);
+                cache.set(code, output);
+                if (cache.size > MAX_CACHED_DIAGRAMS)
+                    cache.delete(cache.keys().next().value!);
+                if (disposed || token !== revision) return;
+                svg.value = scopeSvg(output, viewId);
                 error.value = '';
-            } catch (e: any) {
-                error.value = e.message || 'Failed to render mermaid diagram';
-                svg.value = lastGood.value;
-            } finally {
-                loading.value = false;
+            } catch (cause: unknown) {
+                if (disposed || token !== revision) return;
+                error.value =
+                    cause instanceof Error
+                        ? cause.message
+                        : 'Failed to render mermaid diagram';
             }
         };
 
-        onMounted(render);
+        onMounted(() => {
+            watch(() => [props.code, props.streaming], render, {
+                immediate: true,
+            });
+        });
+        onBeforeUnmount(() => {
+            disposed = true;
+            revision++;
+        });
 
         return () =>
             h(
                 'div',
                 { class: 'relative group', 'data-streamdown': 'mermaid' },
                 [
-                    loading.value
-                        ? h('div', { class: 'flex justify-center py-8' }, [
-                              h('div', {
-                                  class: 'h-5 w-5 border-2 border-gray-300 border-t-transparent rounded-full animate-spin',
-                              }),
-                          ])
-                        : svg.value
+                    // Keep the source (or last successful SVG) until rendering finishes.
+                    // A spinner would collapse the row between the fence and its SVG.
+                    svg.value
                         ? h('div', { innerHTML: svg.value })
-                        : h(
-                              'div',
-                              { class: 'text-red-500 text-sm' },
-                              error.value
-                          ),
-                    !loading.value && error.value && svg.value
+                        : h('pre', { 'data-streamdown': 'pre' }, [
+                              h('code', props.code),
+                          ]),
+                    error.value
                         ? h(
                               'div',
-                              { class: 'text-red-500 text-sm mt-2' },
+                              {
+                                  class: 'text-red-500 text-sm mt-2',
+                                  role: 'status',
+                              },
                               error.value
                           )
                         : null,

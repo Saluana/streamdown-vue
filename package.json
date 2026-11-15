@@ -17,7 +17,12 @@
             "import": "./dist/core.es.js",
             "require": "./dist/core.cjs"
         },
-        "./style.css": "./dist/style.css"
+        "./style.css": "./dist/style.css",
+        "./shiki": {
+            "types": "./dist/shiki.d.ts",
+            "import": "./dist/shiki.es.js",
+            "require": "./dist/shiki.cjs"
+        }
     },
     "scripts": {
         "dev": "vite examples/basic --config vite.config.ts",
@@ -33,7 +38,8 @@
         "prepublishOnly": "bun run test",
         "test:run": "bun test",
         "test:package": "node tests/package-consumer-smoke.mjs",
-        "test": "bun run build && bun run test:run && bun run test:package"
+        "test": "bun run build && bun run test:run && bun run test:package",
+        "test:browser": "node tests/browser-regressions.mjs"
     },
     "files": [
         "dist",

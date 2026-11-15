@@ -1,4 +1,12 @@
-import { defineComponent, h, onBeforeUnmount, shallowRef } from 'vue';
+import {
+    defineComponent,
+    h,
+    onBeforeUnmount,
+    shallowRef,
+    type VNode,
+    isVNode,
+    withMemo,
+} from 'vue';
 import type { PropType } from 'vue';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
@@ -141,7 +149,7 @@ export const StreamMarkdown = defineComponent({
             defaultOrigin: props.defaultOrigin,
         };
 
-        const componentsMap: ComponentMap = {
+        let componentsMap: ComponentMap = {
             ...defaultComponents,
             ...(props.components || {}),
         };
@@ -182,7 +190,9 @@ export const StreamMarkdown = defineComponent({
             const el = node as Element;
             const nodeProps: any = Object.fromEntries(
                 Object.entries(el.properties || {}).map(([key, value]) => [
-                    key,
+                    key === 'className' && !props.components[el.tagName]
+                        ? 'class'
+                        : key,
                     Array.isArray(value) ? [...value] : value,
                 ])
             );
@@ -229,11 +239,9 @@ export const StreamMarkdown = defineComponent({
                 // Display math waiting for KaTeX: show the TeX source plainly
                 // rather than as a code block with copy/download controls.
                 if (lang === 'math') {
-                    return h(
-                        'pre',
-                        { 'data-streamdown': 'math-pending' },
-                        [h('code', { class: className }, code)]
-                    );
+                    return h('pre', { 'data-streamdown': 'math-pending' }, [
+                        h('code', { class: className }, code),
+                    ]);
                 }
                 if (lang === 'mermaid') {
                     return h(MermaidBlock, { code });
@@ -257,6 +265,11 @@ export const StreamMarkdown = defineComponent({
 
             const comp = componentsMap[tag];
             if (comp) {
+                if (comp === defaultComponents[tag] && !props.components[tag]) {
+                    return comp(nodeProps, {
+                        slots: { default: () => children },
+                    });
+                }
                 return createVNode(comp, nodeProps, children);
             }
             return createVNode(tag, nodeProps, children);
@@ -265,16 +278,26 @@ export const StreamMarkdown = defineComponent({
         // --- Per-instance parsed-block cache (internal) ---
         // Retains the previous effective source and the HAST roots of completed
         // blocks so unchanged blocks can skip Unified/KaTeX work on append-only
-        // updates. Cached trees are read-only: renderChildren still runs on every
-        // render and creates fresh VNodes with current props/security settings.
-        type CachedBlock = { input: string; tree: Root };
+        // updates. Cached trees stay read-only; completed VNodes are reused only
+        // while the render/security context remains unchanged.
+        const memoizeCompleted = (nodes: any[]): any[] => {
+            const cache: VNode[] = [];
+            return nodes.map((node, index) =>
+                isVNode(node) ? withMemo([], () => node, cache, index) : node
+            );
+        };
+        type CachedBlock = {
+            input: string;
+            tree: Root;
+            vnodes: VNode[];
+            context: unknown[];
+            completed: boolean;
+        };
         const parseCache: {
             source: string | null;
-            parseIncomplete: boolean;
             records: CachedBlock[];
         } = {
             source: null,
-            parseIncomplete: true,
             records: [],
         };
 
@@ -305,6 +328,28 @@ export const StreamMarkdown = defineComponent({
                 parseCache.records = [];
                 parseCache.source = null;
             }
+            componentsMap = { ...defaultComponents, ...props.components };
+            hardenOptions.allowedImagePrefixes = props.allowedImagePrefixes;
+            hardenOptions.allowedLinkPrefixes = props.allowedLinkPrefixes;
+            hardenOptions.defaultOrigin = props.defaultOrigin;
+            const renderContext: unknown[] = [
+                ...Object.entries(props.components).flat(),
+                ...props.allowedImagePrefixes,
+                null,
+                ...props.allowedLinkPrefixes,
+                props.defaultOrigin,
+                JSON.stringify(props.shikiTheme),
+                props.codeBlockShowLineNumbers,
+                props.codeBlockSelectable,
+                props.codeBlockHideCopy,
+                props.codeBlockHideDownload,
+                ...props.codeBlockActions,
+            ];
+            const sameRenderContext = (previous: unknown[]) =>
+                previous.length === renderContext.length &&
+                previous.every(
+                    (value, index) => value === renderContext[index]
+                );
             let markdownSrc = props.content;
             const slotNodes = slots.default ? slots.default() : [];
             if (slotNodes && slotNodes.length > 0) {
@@ -390,26 +435,30 @@ export const StreamMarkdown = defineComponent({
             const appendOnly =
                 parseCache.source !== null &&
                 markdownSrc.startsWith(parseCache.source);
-            const sameMode =
-                parseCache.parseIncomplete === props.parseIncompleteMarkdown;
             const cacheEligible =
                 !processorHasCustomPlugins && !referencesPresent;
-            const canReuse = cacheEligible && appendOnly && sameMode;
+            const canReuse = cacheEligible && appendOnly;
 
             // Preprocess only the slice fed to the markdown processor. With an open fence
             // that is the prefix, which still needs preprocessing so bracket display math
             // (\[ ... \]) and matrices continue to render. Previously the raw unprocessed
             // prefix was used which caused already rendered KaTeX to "disappear" as soon
             // as a progressive code fence opened.
-            const toProcess = applyLatexPreprocessing(
-                openFenceInfo ? openFenceInfo.prefix : markdownSrc
-            );
-            const markdown = props.parseIncompleteMarkdown
-                ? parseIncompleteMarkdown(toProcess)
-                : toProcess;
+            let sourceToProcess = openFenceInfo
+                ? openFenceInfo.prefix
+                : markdownSrc;
+            // A lone trailing '-' is ambiguous with a list item while streaming.
+            // Delay that underline until another token arrives; final mode still
+            // uses the exact source and renders genuine Setext headings.
+            if (props.parseIncompleteMarkdown)
+                sourceToProcess = sourceToProcess.replace(
+                    /\n {0,3}-[ \t]*$/,
+                    ''
+                );
+            const toProcess = applyLatexPreprocessing(sourceToProcess);
 
             // First split into coarse blocks (only prefix portion if open fence in progress).
-            let rawBlocks = parseBlocks(markdown);
+            let rawBlocks = parseBlocks(toProcess);
 
             // Merge consecutive blocks if, when concatenated, they resolve an odd $$ count
             // (i.e. an opening display math without its closing yet). This prevents splitting
@@ -447,26 +496,19 @@ export const StreamMarkdown = defineComponent({
             }
             flush();
 
-            const blocks = merged
-                .map((b) => b)
-                .map((b) =>
-                    // Use trimEnd() instead of trim() to preserve leading whitespace,
-                    // which is important for markdown elements like code blocks and lists.
-                    // Only trailing whitespace is removed to avoid breaking indented content.
-                    props.parseIncompleteMarkdown
-                        ? parseIncompleteMarkdown(b.trimEnd())
-                        : b
-                );
-
-            // The last non-whitespace block is still growing; it is never reused
-            // even when synthetic repairs make it look closed.
-            let lastMeaningfulIndex = -1;
-            for (let i = blocks.length - 1; i >= 0; i--) {
-                if (!isWhitespaceBlock(blocks[i]!)) {
-                    lastMeaningfulIndex = i;
-                    break;
-                }
-            }
+            // Only the growing tail needs repair. Completed
+            // blocks retain identical source (including code whitespace) when
+            // final mode is selected, so their parsed trees remain reusable.
+            const lastMeaningfulIndex = merged.findLastIndex(
+                (block) => !isWhitespaceBlock(block)
+            );
+            let blocks = merged.map((block, index) =>
+                props.parseIncompleteMarkdown &&
+                !openFenceInfo &&
+                index === lastMeaningfulIndex
+                    ? parseIncompleteMarkdown(block.trimEnd())
+                    : block
+            );
 
             // Reuse is decided here, at the final prepared-input/processor
             // boundary, and only for an unbroken prefix of records whose exact
@@ -483,6 +525,12 @@ export const StreamMarkdown = defineComponent({
             // - cached HAST is never mutated; renderChildren only reads it.
             // Rerun the differential tests in __tests__/parse-cache.test.ts and
             // the browser profiles after changing any of these stages.
+            // Terminal newlines outside a completed block do not affect its
+            // Markdown tree. Normalize only completed inputs, retaining spaces
+            // and the active tail's exact code/newline semantics.
+            blocks = blocks.map((input, index) =>
+                index < lastMeaningfulIndex ? input.replace(/\n+$/, '') : input
+            );
             let reuseCount = 0;
             if (canReuse) {
                 const limit = Math.min(
@@ -506,17 +554,38 @@ export const StreamMarkdown = defineComponent({
                 if (i < reuseCount) {
                     const record = parseCache.records[i]!;
                     if (cacheEligible) nextRecords.push(record);
-                    vnodes.push(...renderChildren(record.tree.children as any[]));
+                    if (
+                        !record.completed ||
+                        !sameRenderContext(record.context)
+                    ) {
+                        record.vnodes = memoizeCompleted(
+                            renderChildren(record.tree.children as any[])
+                        );
+                        record.context = renderContext;
+                        record.completed = true;
+                    }
+                    vnodes.push(...record.vnodes);
                     continue;
                 }
                 const tree = processor.runSync(processor.parse(input)) as Root;
-                if (!processorHasKatex && !needsMath) needsMath = containsMath(tree);
-                if (cacheEligible) nextRecords.push({ input, tree });
-                vnodes.push(...renderChildren(tree.children as any[]));
+                if (!processorHasKatex && !needsMath)
+                    needsMath = containsMath(tree);
+                const nodes = renderChildren(tree.children as any[]);
+                const completed =
+                    i < lastMeaningfulIndex || Boolean(openFenceInfo);
+                const rendered = completed ? memoizeCompleted(nodes) : nodes;
+                if (cacheEligible)
+                    nextRecords.push({
+                        input,
+                        tree,
+                        vnodes: rendered,
+                        context: renderContext,
+                        completed,
+                    });
+                vnodes.push(...rendered);
             }
             parseCache.records = cacheEligible ? nextRecords : [];
             parseCache.source = markdownSrc;
-            parseCache.parseIncomplete = props.parseIncompleteMarkdown;
 
             // First math seen without KaTeX: load it, then re-render. A failed
             // load leaves the TeX source shown; the next render with math retries.
@@ -534,18 +603,23 @@ export const StreamMarkdown = defineComponent({
                 const CodeComp =
                     (componentsMap['codeblock'] as any) || CodeBlock;
                 vnodes.push(
-                    h(CodeComp, {
-                        code: openFenceInfo.code,
-                        language: openFenceInfo.lang,
-                        theme: props.shikiTheme,
-                        actions: props.codeBlockActions,
-                        showLineNumbers: props.codeBlockShowLineNumbers,
-                        selectable: props.codeBlockSelectable,
-                        hideCopy: props.codeBlockHideCopy,
-                        hideDownload: props.codeBlockHideDownload,
-                        'data-open-fence': 'true',
-                        'data-streaming': 'true',
-                    })
+                    openFenceInfo.lang === 'mermaid'
+                        ? h(MermaidBlock, {
+                              code: openFenceInfo.code,
+                              streaming: true,
+                          })
+                        : h(CodeComp, {
+                              code: openFenceInfo.code,
+                              language: openFenceInfo.lang,
+                              theme: props.shikiTheme,
+                              actions: props.codeBlockActions,
+                              showLineNumbers: props.codeBlockShowLineNumbers,
+                              selectable: props.codeBlockSelectable,
+                              hideCopy: props.codeBlockHideCopy,
+                              hideDownload: props.codeBlockHideDownload,
+                              'data-open-fence': 'true',
+                              'data-streaming': 'true',
+                          })
                 );
             }
             const rootClass = [

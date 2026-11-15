@@ -28,10 +28,29 @@ jobs:
         run: bun run build
 
       - name: Verify declaration entries
-        run: test -f dist/index.d.ts && test -f dist/core.d.ts
+        run: test -f dist/index.d.ts && test -f dist/core.d.ts && test -f dist/shiki.d.ts
 
       - name: Test
         run: bun run test:run
 
       - name: Package consumer smoke test
         run: bun run test:package
+
+      - name: Install browser engines
+        run: bunx playwright install --with-deps chromium webkit
+
+      - name: Browser regressions (Chromium)
+        run: bun run test:browser
+
+      - name: Browser regressions (WebKit)
+        run: bun run test:browser
+        env:
+          STREAMDOWN_BROWSER: webkit
+          STREAMDOWN_EVIDENCE_DIR: artifacts/browser-webkit
+
+      - name: Preserve browser receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-regressions
+          path: artifacts/
