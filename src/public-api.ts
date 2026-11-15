@@ -1,4 +1,5 @@
 export { StreamMarkdown, StreamMarkdown as default } from './StreamMarkdown';
+export { preloadMath } from './math';
 export type { ShikiThemeConfig } from './types';
 export { default as CodeBlock } from './components/CodeBlock';
 export { default as MermaidBlock } from './components/MermaidBlock';

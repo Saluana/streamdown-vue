@@ -4,6 +4,31 @@
 
 ---
 
+## Migration: KaTeX now loads on demand
+
+KaTeX is no longer bundled with `<StreamMarkdown>`. It loads the first time rendered content contains math, so apps whose content has no math no longer download or parse it (about 250 KB of JavaScript before compression). The props, slots and rendered math output are unchanged.
+
+What changes:
+
+-   **Before KaTeX has loaded, math shows as its TeX source** in a `pre`/`code` element marked `data-streamdown="math-pending"`, then re-renders as KaTeX when it arrives (usually within a frame or two of the first math).
+-   **Server-side rendering renders math as TeX source** unless KaTeX was loaded first.
+
+To render math on the first pass, as before, call `preloadMath()` and await it before rendering:
+
+```ts
+import { preloadMath } from 'streamdown-vue';
+
+await preloadMath();
+```
+
+-   **SSR / Nuxt:** call it on the server before rendering **and** on the client before hydrating, so both render the same markup (otherwise Vue reports a hydration mismatch for pages with math). See §15.9.
+-   **Tests that assert KaTeX output** from a single synchronous render: `await preloadMath()` in a `beforeAll`.
+-   **Client-only apps** need no change. Call `preloadMath()` at startup only if you want math to render without the brief TeX-source state.
+
+You still import `katex/dist/katex.min.css` yourself, as before.
+
+---
+
 ## Table of Contents
 
 1. Features
@@ -732,6 +757,8 @@ Supported by default:
 -   Display math: `\[ ... \]` (normalized to `$$` blocks). LaTeX inside inline code, indented code, and fenced code stays exactly as written.
 -   (If you add them) Inline math via `\( ... \)` or by providing your own `remark-math` with single‑dollar enabled.
 
+`rehype-katex` (and KaTeX) is loaded the first time math appears; until then math renders as its TeX source marked `data-streamdown="math-pending"`. Call `await preloadMath()` before rendering to have math rendered on the first pass (required for matching SSR and hydration output). See [Migration](#migration-katex-now-loads-on-demand).
+
 ### 12.2 Opting into single‑dollar inline math
 
 If you really want `$x + y$` style inline math, provide your own configured plugin tuple. When you do this the built‑in math plugin is skipped:
@@ -955,6 +982,18 @@ const { rendered, start } = useStreamedMarkdown('/api/chat');
 -   The stream loop runs only client-side; on first SSR render you may want a placeholder skeleton.
 -   Shiki highlighting of large code blocks happens client-side; if you need critical highlighted code for SEO, pre-process the markdown on the server and send the HTML (future enhancement: server highlight hook).
 -   Ensure Mermaid is only executed client-side (the provided plugin pattern handles this since the component executes render logic on mount).
+-   KaTeX loads on demand, so a server render shows math as TeX source unless KaTeX was loaded first. Load it on both the server and the client (before hydration) so the markup matches:
+
+```ts
+// plugins/streamdown-math.ts (runs on server and client)
+import { preloadMath } from 'streamdown-vue';
+
+export default defineNuxtPlugin(async () => {
+    await preloadMath();
+});
+```
+
+Skip this if your server-rendered pages never contain math; KaTeX then loads only when math first appears in the browser.
 
 ### 15.10 Troubleshooting
 
@@ -964,6 +1003,7 @@ const { rendered, start } = useStreamedMarkdown('/api/chat');
 | Links stripped                     | Adjust `allowed-link-prefixes` / set `default-origin` to resolve relative paths first.                                       |
 | Images missing                     | Add CDN prefix to `allowed-image-prefixes`.                                                                                  |
 | Flash of unstyled math             | Confirm KaTeX CSS loaded in client plugin before first render.                                                               |
+| Math shows as TeX source at first  | KaTeX loads on first use. `await preloadMath()` before rendering (on server and client for SSR) to render it on the first pass. |
 | High CPU on huge streams           | Throttle updates (wrap repair/render in `requestAnimationFrame` or batch by char count).                                     |
 
 That’s it—Nuxt integration is essentially drop‑in plus an optional streaming composable.
@@ -996,7 +1036,7 @@ const remarkAppend = () => (tree: any) => {
 
 **Why repair outside instead of inside the component?** Control & transparency. You can decide when to re-render; the component focuses on a deterministic AST transform.
 
-**Can I disable KaTeX or Mermaid?** For now they are bundled if you use their fences. Future option could allow toggling; PRs welcome.
+**Can I disable KaTeX or Mermaid?** Neither is bundled with the renderer: both load the first time content uses them (math, or a `mermaid` fence). Content without them never downloads them.
 
 **Does it sanitize HTML?** Inline HTML is not allowed (passed through remark/rehype with `allowDangerousHtml: false`). Add a sanitizer plugin if you purposely enable raw HTML.
 

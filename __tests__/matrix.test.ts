@@ -1,8 +1,12 @@
-import { describe, it, expect } from 'bun:test';
+import { beforeAll, describe, it, expect } from 'bun:test';
 import { h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { fixMatrix } from '../lib/latex-utils';
 import { StreamMarkdown } from '../src/StreamMarkdown';
+import { preloadMath } from '../src/math';
+
+// KaTeX loads on demand; these tests assert rendered math on the first pass.
+beforeAll(() => preloadMath());
 
 describe('matrix repair', () => {
     it('adds row breaks when rows are on separate lines', () => {

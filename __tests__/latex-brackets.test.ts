@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'bun:test';
+import { beforeAll, describe, it, expect } from 'bun:test';
 import { h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { StreamMarkdown } from '../src/StreamMarkdown';
+import { preloadMath } from '../src/math';
+
+// KaTeX loads on demand; these tests assert rendered math on the first pass.
+beforeAll(() => preloadMath());
 
 const aiResponse = `好的！KaTeX 是一个非常流行的数学公式渲染引擎。下面是一些常见的数学公式示例，使用 KaTeX 语法：
 

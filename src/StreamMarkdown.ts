@@ -1,12 +1,12 @@
-import { defineComponent, h, onBeforeUnmount } from 'vue';
+import { defineComponent, h, onBeforeUnmount, shallowRef } from 'vue';
 import type { PropType } from 'vue';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import remarkRehype from 'remark-rehype';
-import rehypeKatex from 'rehype-katex';
 import type { Element, Root, Text } from 'hast';
+import { getRehypeKatex, preloadMath } from './math';
 import CodeBlock from './components/CodeBlock';
 import MermaidBlock from './components/MermaidBlock';
 import defaultComponents, { type ComponentMap } from './components/components';
@@ -77,40 +77,63 @@ export const StreamMarkdown = defineComponent({
         const processorHasCustomPlugins =
             props.remarkPlugins.length > 0 || props.rehypePlugins.length > 0;
 
-        const processor = unified()
-            .use(ensurePlugin(remarkParse))
-            .use(ensurePlugin(remarkGfm));
+        // KaTeX loads on demand (see ./math). Until it has loaded the pipeline
+        // runs without `rehype-katex`, math renders as its TeX source, and the
+        // processor is rebuilt with KaTeX once it arrives.
+        const buildProcessor = () => {
+            const next = unified()
+                .use(ensurePlugin(remarkParse))
+                .use(ensurePlugin(remarkGfm));
 
-        // Default: include remark-math but disable single-dollar inline math so currency like $390K is safe.
-        if (!userSuppliesRemarkMath) {
-            processor.use(ensurePlugin(remarkMath), {
-                singleDollarTextMath: false,
+            // Default: include remark-math but disable single-dollar inline math so currency like $390K is safe.
+            if (!userSuppliesRemarkMath) {
+                next.use(ensurePlugin(remarkMath), {
+                    singleDollarTextMath: false,
+                });
+            }
+
+            // Support [plugin, options] tuples for remark plugins
+            props.remarkPlugins.forEach((entry: any) => {
+                if (Array.isArray(entry)) {
+                    const [plugin, options] = entry;
+                    next.use(ensurePlugin(plugin), options);
+                } else {
+                    next.use(ensurePlugin(entry));
+                }
             });
-        }
 
-        // Support [plugin, options] tuples for remark plugins
-        props.remarkPlugins.forEach((entry: any) => {
-            if (Array.isArray(entry)) {
-                const [plugin, options] = entry;
-                processor.use(ensurePlugin(plugin), options);
-            } else {
-                processor.use(ensurePlugin(entry));
-            }
-        });
+            next.use(ensurePlugin(remarkRehype), { allowDangerousHtml: false });
+            const rehypeKatex = getRehypeKatex();
+            if (rehypeKatex) next.use(ensurePlugin(rehypeKatex));
 
-        processor
-            .use(ensurePlugin(remarkRehype), { allowDangerousHtml: false })
-            .use(ensurePlugin(rehypeKatex));
+            // Support [plugin, options] tuples for rehype plugins (deduped loop)
+            props.rehypePlugins.forEach((entry: any) => {
+                if (Array.isArray(entry)) {
+                    const [plugin, options] = entry;
+                    next.use(ensurePlugin(plugin), options);
+                } else {
+                    next.use(ensurePlugin(entry));
+                }
+            });
+            return { processor: next, hasKatex: Boolean(rehypeKatex) };
+        };
+        let { processor, hasKatex: processorHasKatex } = buildProcessor();
+        // Bumped when KaTeX finishes loading so math waiting on it re-renders.
+        const mathVersion = shallowRef(0);
+        let disposed = false;
 
-        // Support [plugin, options] tuples for rehype plugins (deduped loop)
-        props.rehypePlugins.forEach((entry: any) => {
-            if (Array.isArray(entry)) {
-                const [plugin, options] = entry;
-                processor.use(ensurePlugin(plugin), options);
-            } else {
-                processor.use(ensurePlugin(entry));
-            }
-        });
+        // remark-rehype emits math as `code.language-math` (inside `pre` for
+        // display math). rehype-katex replaces those nodes, so any left over
+        // mean the content has math that KaTeX has not rendered yet.
+        const isMathCode = (node: any) =>
+            node?.type === 'element' &&
+            node.tagName === 'code' &&
+            ((node.properties?.className || []) as string[]).includes(
+                'language-math'
+            );
+        const containsMath = (node: any): boolean =>
+            isMathCode(node) ||
+            (Array.isArray(node?.children) && node.children.some(containsMath));
 
         const hardenOptions: HardenOptions = {
             allowedImagePrefixes: props.allowedImagePrefixes,
@@ -203,6 +226,15 @@ export const StreamMarkdown = defineComponent({
                 const lang = langClass
                     ? langClass.replace('language-', '')
                     : '';
+                // Display math waiting for KaTeX: show the TeX source plainly
+                // rather than as a code block with copy/download controls.
+                if (lang === 'math') {
+                    return h(
+                        'pre',
+                        { 'data-streamdown': 'math-pending' },
+                        [h('code', { class: className }, code)]
+                    );
+                }
                 if (lang === 'mermaid') {
                     return h(MermaidBlock, { code });
                 }
@@ -219,6 +251,9 @@ export const StreamMarkdown = defineComponent({
                     hideDownload: props.codeBlockHideDownload,
                 });
             }
+
+            // Inline math waiting for KaTeX keeps its `code` element.
+            if (isMathCode(el)) nodeProps['data-streamdown'] = 'math-pending';
 
             const comp = componentsMap[tag];
             if (comp) {
@@ -255,11 +290,21 @@ export const StreamMarkdown = defineComponent({
         // Release the current document's parsed trees as soon as the component
         // unmounts. The cache never holds prior documents or other instances.
         onBeforeUnmount(() => {
+            disposed = true;
             parseCache.records.length = 0;
             parseCache.source = null;
         });
 
         return () => {
+            // Read so this component re-renders when KaTeX finishes loading.
+            void mathVersion.value;
+            // KaTeX became available (loaded here or by another instance):
+            // rebuild with it and drop trees parsed without it.
+            if (!processorHasKatex && getRehypeKatex()) {
+                ({ processor, hasKatex: processorHasKatex } = buildProcessor());
+                parseCache.records = [];
+                parseCache.source = null;
+            }
             let markdownSrc = props.content;
             const slotNodes = slots.default ? slots.default() : [];
             if (slotNodes && slotNodes.length > 0) {
@@ -455,6 +500,7 @@ export const StreamMarkdown = defineComponent({
 
             const nextRecords: CachedBlock[] = [];
             const vnodes: any[] = [];
+            let needsMath = false;
             for (let i = 0; i < blocks.length; i++) {
                 const input = blocks[i]!;
                 if (i < reuseCount) {
@@ -464,12 +510,24 @@ export const StreamMarkdown = defineComponent({
                     continue;
                 }
                 const tree = processor.runSync(processor.parse(input)) as Root;
+                if (!processorHasKatex && !needsMath) needsMath = containsMath(tree);
                 if (cacheEligible) nextRecords.push({ input, tree });
                 vnodes.push(...renderChildren(tree.children as any[]));
             }
             parseCache.records = cacheEligible ? nextRecords : [];
             parseCache.source = markdownSrc;
             parseCache.parseIncomplete = props.parseIncompleteMarkdown;
+
+            // First math seen without KaTeX: load it, then re-render. A failed
+            // load leaves the TeX source shown; the next render with math retries.
+            if (needsMath) {
+                preloadMath().then(
+                    () => {
+                        if (!disposed) mathVersion.value++;
+                    },
+                    () => {}
+                );
+            }
 
             // Append partial open fence code block if present
             if (openFenceInfo) {

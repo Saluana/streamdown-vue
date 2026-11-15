@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'bun:test';
+import { beforeAll, describe, it, expect } from 'bun:test';
 import { h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { StreamMarkdown } from '../src/StreamMarkdown';
+import { preloadMath } from '../src/math';
+
+// KaTeX loads on demand; these tests assert rendered math on the first pass.
+beforeAll(() => preloadMath());
 
 // Ensures inline bracket math within a paragraph is lifted to a display block.
 
