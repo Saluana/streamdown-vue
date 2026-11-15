@@ -538,6 +538,7 @@ describe('parse cache differential output', () => {
 
     it('does not expose cached property arrays to custom components', async () => {
         const receivedClasses: string[][] = [];
+        const origin = ref('https://first.example');
         const MutatingListItem = (props: any, { slots }: any) => {
             const classes = props.className as string[];
             receivedClasses.push([...classes]);
@@ -545,10 +546,15 @@ describe('parse cache differential output', () => {
             return h('li', {}, slots.default?.());
         };
         const harness = mountInstances([
-            cachedSpec(() => ({ components: { li: MutatingListItem } })),
+            cachedSpec(() => ({
+                components: { li: MutatingListItem },
+                defaultOrigin: origin.value,
+            })),
         ]);
         try {
             await harness.setContents(['- [ ] task\n\nActive paragraph']);
+            // Invalidate rendering and recreate props from the immutable HAST.
+            origin.value = 'https://second.example';
             await harness.setContents([
                 '- [ ] task\n\nActive paragraph extended',
             ]);

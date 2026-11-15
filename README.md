@@ -58,7 +58,7 @@ You still import `katex/dist/katex.min.css` yourself, as before.
 -   KaTeX math (`remark-math` + `rehype-katex`) with extra repairs (matrices, stray `$`)
 -   Shiki syntax highlighting (light + dark themes) with reactive copy & download buttons
     and an extensible action bar (add your own buttons globally or per-instance)
--   Mermaid diagrams with caching, async render & graceful error recovery
+-   Mermaid diagrams with async rendering, readable streaming source & graceful error recovery
 -   Incremental rendering + repair of incomplete Markdown tokens while streaming
 -   Secure allow‑list based hardening of link & image URLs (blocks `javascript:` etc.)
 -   Component override layer (swap any tag / embed custom Vue components)
@@ -302,7 +302,7 @@ Why repair first? Without repair, a trailing `**` or lone ``` will invalidate th
 | `defaultOrigin`            | `string?`                  | `undefined`              | Base URL used to resolve relative links/images before allow‑list checks.                                                                                                        |
 | `allowedImagePrefixes`     | `string[]`                 | `['https://','http://']` | Allowed (lowercased) URL prefixes for `<img>`. Blocked => image dropped.                                                                                                        |
 | `allowedLinkPrefixes`      | `string[]`                 | `['https://','http://']` | Allowed prefixes for `<a href>`. Blocked => link text only.                                                                                                                     |
-| `parseIncompleteMarkdown`  | `boolean`                  | `true`                   | (Future toggle) Auto apply repair internally. Currently you repair outside using utility; prop reserved.                                                                        |
+| `parseIncompleteMarkdown`  | `boolean`                  | `true`                   | Repair incomplete Markdown while streaming. Set false for final Markdown semantics.                                                                        |
 | `shikiTheme`               | `ShikiThemeConfig`         | `undefined`              | Shiki theme (string) or dual theme object `{ light: '...', dark: '...' }`. If undefined, follows system preference (`github-light`/`github-dark`).                            |
 | `codeBlockActions`         | `Component[]`              | `[]`                     | Array of Vue components appended as action buttons in every code block header.                                                                                                  |
 | `codeBlockShowLineNumbers` | `boolean`                  | `false`                  | Show line numbers in all code fences.                                                                                                                                           |
@@ -480,6 +480,29 @@ const MyCode = defineComponent({
 ```
 
 > **Need a deeper walkthrough?** The [Shiki Language Bundling Guide](./docs/shiki-language-guide.md) covers both the batteries-included entry and the minimal core workflow.
+
+### Streaming and external highlighting
+
+`CodeBlock` keeps the latest source visible while highlighting runs. Completed
+lines retain their tokens; the mutable suffix stays escaped plaintext until a
+job finishes. Results apply only to the same language/theme and an unchanged
+source prefix. Edits, replacements, provider changes and unmount invalidate old
+jobs. Appending code preserves existing DOM nodes and text selections.
+
+For worker integration, pass `highlight(input: CodeHighlightInput): Promise<string>`
+to `CodeBlock` (or a `components.codeblock` wrapper). Return trusted Shiki HTML;
+this hook is not an HTML sanitizer. Rejections leave readable escaped source.
+Line numbers, selection controls, copy/download and themes still apply.
+
+Workers can import the DOM-free `streamdown-vue/shiki` entry. It shares the
+registry and highlighter with the renderer but does not register defaults
+automatically. Register the languages needed in that worker, then create one
+`createStreamingHighlighter(await useShikiHighlighter())` per mounted code block.
+Call it with `{ code, language, theme }` for each snapshot and release the function
+when that block leaves. It carries grammar state across complete lines and resets
+on edits, truncation, language/theme or resolved grammar changes. ANSI uses the
+full highlighter. Work still includes serializing the output HTML, so this does
+not make arbitrarily large blocks constant-cost.
 
 ### 10.1 Changing the Shiki Theme
 
@@ -726,6 +749,16 @@ The default copy button uses the Clipboard API and toggles its success icon only
 
 ## 11. Mermaid Diagrams
 
+Open Mermaid fences keep their readable source until the closing fence arrives.
+The last 32 finished diagrams are cached by source across row unmounts. Cached
+diagrams remount before paint with fresh namespaces for SVG IDs and references,
+so identical diagrams can appear together.
+The source remains during the first render; later edits retain the last successful
+SVG until its replacement is ready. There is no intermediate spinner collapse.
+`MermaidBlock` also accepts `streaming: boolean` for direct use and responds to
+code changes. A single trailing `-` after a paragraph is deferred while streaming;
+final mode retains normal Setext-heading semantics.
+
 Fenced block:
 
 ````md
@@ -737,7 +770,7 @@ graph TD;A-->B;B-->C;
 The `MermaidBlock` component handles:
 
 -   Deduplicated initialization
--   Simple hash based caching
+-   Reactive source changes with stale-result rejection
 -   Error fallback (last good diagram)
 -   Copy diagram source
 
@@ -819,11 +852,11 @@ Benchmarks and the reproducible Chromium streaming profile are documented in `do
 
 ### Streaming parse cache (automatic)
 
-`<StreamMarkdown>` keeps a small per-instance cache so append-only streaming updates do not re-run Unified/remark/rehype/KaTeX for completed blocks whose final parser input is unchanged. The cache is internal: there is no new prop, and the component still creates fresh VNodes (with current hardening, themes, code controls, and custom components) on every render.
+`<StreamMarkdown>` keeps a small per-instance cache so append-only streaming updates do not re-run Unified/remark/rehype/KaTeX for completed blocks whose final parser input is unchanged. The cache is internal: completed VNodes are reused while hardening, theme, code controls and component context remain unchanged. Custom tag overrides participate in reuse; they receive cloned property arrays when their render context changes. Treat Markdown props as read-only. Internal reactive state in custom components still updates normally. Built-in stateless tags render as native elements.
 
--   The last non-whitespace block is always reparsed; a block is only reused after a real following boundary exists.
+-   Only the growing tail is repaired for incomplete Markdown and reparsed. Completed blocks preserve literal unmatched markers such as `2 * 3 = 6` and `snake_case`; a block is only reused after a real following boundary exists.
 -   Reuse stops at the first changed or uncertain block; the rest of the document reparses normally.
--   The cache is bypassed for the whole document when it contains link reference definitions or footnotes (later definitions can reinterpret earlier blocks), when any custom `remarkPlugins`/`rehypePlugins` are present, after non-append edits or truncation, and when `parseIncompleteMarkdown` changes.
+-   The cache is bypassed for the whole document when it contains link reference definitions or footnotes (later definitions can reinterpret earlier blocks), when any custom `remarkPlugins`/`rehypePlugins` are present, and after non-append edits or truncation. A parse-mode change can retain completed blocks whose normalized final parser input is identical; the active tail always reparses.
 -   Only the current document's parsed trees are retained, and they are released on reset and unmount. Cached trees are treated as read-only.
 -   Cached and bypassed rendering are compared at every chunk in `__tests__/parse-cache.test.ts`; keep them green when changing preprocessing, block splitting/merging, or the processor pipeline.
 

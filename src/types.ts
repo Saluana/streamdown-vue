@@ -15,3 +15,10 @@
  * const theme: ShikiThemeConfig = { light: 'github-light', dark: 'github-dark' };
  */
 export type ShikiThemeConfig = string | { light: string; dark: string };
+
+/** Immutable input for a trusted asynchronous code highlighter (for example a worker). */
+export interface CodeHighlightInput {
+    code: string;
+    language: string;
+    theme: ShikiThemeConfig;
+}

@@ -19,6 +19,7 @@ export default defineConfig({
             entry: {
                 index: 'index.ts',
                 core: 'core.ts',
+                shiki: 'shiki.ts',
             },
             name: 'StreamdownVue',
             formats: ['es', 'cjs'],

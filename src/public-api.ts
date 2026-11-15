@@ -1,6 +1,7 @@
 export { StreamMarkdown, StreamMarkdown as default } from './StreamMarkdown';
 export { preloadMath } from './math';
-export type { ShikiThemeConfig } from './types';
+export type { ShikiThemeConfig, CodeHighlightInput } from './types';
+export { createStreamingHighlighter } from './shiki/streaming';
 export { default as CodeBlock } from './components/CodeBlock';
 export { default as MermaidBlock } from './components/MermaidBlock';
 export { default as CopyButton } from './components/CopyButton';

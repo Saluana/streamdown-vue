@@ -37,7 +37,7 @@ export const createCdnLanguageLoader = (
             `${SHIKI_CDN_BASE}${specifier}.mjs`
         );
     const loader: LanguageInput = async () => {
-        if (typeof window === 'undefined') {
+        if (typeof window === 'undefined' && typeof self === 'undefined') {
             return local();
         }
         try {

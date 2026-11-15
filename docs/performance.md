@@ -54,3 +54,24 @@ Heap values are forced-GC deltas from the immediately preceding disposed baselin
 The cache trades mounted memory for lower update work: four mixed instances retain about 2.97 MiB more than bypass while mounted. After disposal, the cache sample was within 0.07 MiB of its baseline, establishing that the retained HAST does not survive component teardown in this run. Small negative post-disposal deltas are normal forced-GC sampling noise.
 
 Regression coverage lives in `__tests__/parse-cache.test.ts` (differential cached-vs-bypassed output at every chunk, parse-call counting, frozen-tree mutation detection, instance isolation, and fallback rules). Package qualification still requires testing the exact artifact that chat will pin; publication and chat integration are tracked separately.
+
+The browser regression suite exercises asynchronous code-provider races, live
+suffix visibility, selection retention, multiline grammar state, theme/control
+changes, stable completed DOM, dynamic overrides, Mermaid edits and hydration.
+Run `bun run test:browser` after installing Chromium with
+`bunx playwright install chromium`. Set `STREAMDOWN_BROWSER=webkit` to use WebKit
+(install that engine first). JSON receipts and failure screenshots go to
+`artifacts/browser-regressions`, or `STREAMDOWN_EVIDENCE_DIR`. CI runs both engines
+and preserves those receipts.
+
+Completed-block VNode reuse includes custom tag overrides such as chat image
+components. Vue memo metadata avoids unnecessary component updates for an
+unchanged completed block; component state remains reactive. A former growing
+tail becomes memoized once its following block arrives. Incomplete-Markdown
+repair applies only to that growing tail, preserving literal markers in earlier
+paragraphs through stream completion.
+
+Mermaid retains at most 32 finished SVGs by exact source text. Remounts namespace
+all SVG IDs and references per instance before paint instead of running Mermaid
+again. Browser regressions cover remount height, duplicate diagrams and internal
+references in Chromium and WebKit.
