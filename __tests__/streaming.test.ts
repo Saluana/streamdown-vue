@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'bun:test';
+import { beforeAll, describe, expect, it } from 'bun:test';
 import { h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import fs from 'fs';
 import path from 'path';
+import { preloadMath } from '../src/math';
+
 // Import directly from source to ensure latest code is used in tests without requiring a build step
 import { StreamMarkdown } from '../src/StreamMarkdown';
+// KaTeX loads on demand; these tests assert rendered math on the first pass.
+beforeAll(() => preloadMath());
 
 const complex = fs.readFileSync(
     path.join(__dirname, 'fixtures/complex.md'),

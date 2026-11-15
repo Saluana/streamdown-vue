@@ -1,7 +1,10 @@
-import { describe, it, expect } from 'bun:test';
+import { beforeAll, describe, it, expect } from 'bun:test';
 import { h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
-import { StreamMarkdown, parseIncompleteMarkdown } from '..';
+import { StreamMarkdown, parseIncompleteMarkdown, preloadMath } from '..';
+
+// KaTeX loads on demand; these tests assert rendered math on the first pass.
+beforeAll(() => preloadMath());
 
 const render = (md: string, extra: any = {}) =>
     renderToString(h(StreamMarkdown, { content: md, ...extra }));

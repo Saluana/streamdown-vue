@@ -114,10 +114,19 @@ assert.match(html, /Packaged consumer/);
 
 const cjsVue = require('vue');
 const cjsServer = require('vue/server-renderer');
-for (const [StreamMarkdown, createApp, render] of [
-    [esm.StreamMarkdown, createSSRApp, renderToString],
-    [cjs.StreamMarkdown, cjsVue.createSSRApp, cjsServer.renderToString],
+for (const [packaged, createApp, render] of [
+    [esm, createSSRApp, renderToString],
+    [cjs, cjsVue.createSSRApp, cjsServer.renderToString],
 ]) {
+    const { StreamMarkdown } = packaged;
+    // KaTeX loads on demand; before it loads, math renders as its TeX source.
+    const pendingHtml = await render(
+        createApp(StreamMarkdown, { content: '$$\\nx^2\\n$$' })
+    );
+    assert.match(pendingHtml, /data-streamdown="math-pending"/);
+    // Server rendering loads it first so math renders on the first pass.
+    assert.equal(typeof packaged.preloadMath, 'function');
+    await packaged.preloadMath();
     const latexHtml = await render(
         createApp(StreamMarkdown, { content: ${JSON.stringify(latexBesideCode)} })
     );

@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'bun:test';
+import { beforeAll, describe, it, expect } from 'bun:test';
 import { h } from 'vue';
 import { renderToString } from '@vue/server-renderer';
 import { StreamMarkdown } from '../src/StreamMarkdown';
+import { preloadMath } from '../src/math';
+
+// KaTeX loads on demand; these tests assert rendered math on the first pass.
+beforeAll(() => preloadMath());
 
 // Simulates user scenario: many bracket math blocks first, later an open progressive fenced code block starts.
 // We stream chunk by chunk ensuring earlier math does not "fall back" to plain text when the open fence appears.
